@@ -1,7 +1,7 @@
 .image_canvas {
     /* This sets the size of all the subelements due to the JS */
     width: 1200px;
-    height: 400px;
+    height: 600px;
     /* Make this a relative position to define a position context for 'absolute' to be meaningful relative to this block for 'can' items */
     position: relative;
 }

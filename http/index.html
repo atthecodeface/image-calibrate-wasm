@@ -23,18 +23,24 @@
       <tr>
       <td>
       <label for="img_uploads">Image</label>
-      <input type="file" id="img_uploads" name="img_uploads" accept=".jpg"/>      
+      <input type="file" id="img_uploads" name="img_uploads" accept=".jpg" onchange="window.image_canvas.img_select_file(document.getElementById('img_uploads').files[0]);"/>      
    </td>
    </tr>
       <tr>
       <td>
       <label for="nps_uploads">NPS (JSON)</label>
-      <input type="file" id="nps_uploads" name="nps_uploads" accept=".json"/>      
+      <input type="file" id="nps_uploads" name="nps_uploads" accept=".json" onchange="window.image_canvas.nps_select_file(document.getElementById('nps_uploads').files[0]);"/>      
    </td>
    </tr>
    <tr>
    <td>
-      <label for="image_uploads">PMS (JSON)</label>
+      <label for="camera_uploads">Camera (JSON)</label>
+      <input type="file" id="camera_uploads" name="camera_uploads" accept=".json" onchange="window.image_canvas.camera_select_file(document.getElementById('camera_uploads').files[0]);"/>
+      </td>
+      </tr>
+   <tr>
+   <td>
+      <label for="pms_uploads">PMS (JSON)</label>
       <input type="file" id="pms_uploads" name="pms_uploads" accept=".json" onchange="window.image_canvas.pms_select_file(document.getElementById('pms_uploads').files[0]);"/>
       </td>
       </tr>

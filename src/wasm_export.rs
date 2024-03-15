@@ -6,7 +6,9 @@ use js_sys::Function as JsFunction;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
-use image_calibrate::{CameraDatabase, CameraInstance, Color, NamedPointSet, PointMappingSet};
+use image_calibrate::{
+    CameraDatabase, CameraInstance, CameraMapping, Color, NamedPointSet, PointMappingSet,
+};
 
 //a WasmCameraDatabase
 //tp WasmCameraDatabase
@@ -45,6 +47,18 @@ impl WasmCameraInstance {
         let json = image_calibrate::json::remove_comments(json);
         let camera = CameraInstance::from_json(&cdb.cdb, &json)?;
         Ok(Self { camera })
+    }
+
+    //mp map_model
+    pub fn map_model(&self, pt: &[f64]) -> Result<Box<[f64]>, String> {
+        if pt.len() != 3 {
+            Err("Expected model point (x,y,z)".into())
+        } else {
+            let model = [pt[0], pt[1], pt[2]].into();
+            let camera_mapping = CameraMapping::of_camera(self.camera.clone());
+            let pxy: [f64; 2] = camera_mapping.map_model(model).into();
+            Ok(Box::new(pxy))
+        }
     }
 }
 
