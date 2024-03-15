@@ -1,14 +1,8 @@
 //a Imports
-use std::rc::Rc;
-
 use js_sys::Array;
-use js_sys::Function as JsFunction;
 use wasm_bindgen::prelude::*;
-use web_sys::HtmlCanvasElement;
 
-use image_calibrate::{
-    CameraDatabase, CameraInstance, CameraMapping, Color, NamedPointSet, PointMappingSet,
-};
+use image_calibrate::{CameraDatabase, CameraInstance, Color, NamedPointSet, PointMappingSet};
 
 //a WasmCameraDatabase
 //tp WasmCameraDatabase
@@ -55,8 +49,7 @@ impl WasmCameraInstance {
             Err("Expected model point (x,y,z)".into())
         } else {
             let model = [pt[0], pt[1], pt[2]].into();
-            let camera_mapping = CameraMapping::of_camera(self.camera.clone());
-            let pxy: [f64; 2] = camera_mapping.map_model(model).into();
+            let pxy: [f64; 2] = self.camera.map_model(model).into();
             Ok(Box::new(pxy))
         }
     }

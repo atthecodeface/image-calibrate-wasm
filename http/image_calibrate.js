@@ -65,6 +65,7 @@ class Ic {
         this.nps = new WasmNamedPointSet();
         this.cam = new WasmCameraInstance(this.cdb, camera_inst_json);
         this.pms = new WasmPointMappingSet();
+        this.other_cams = [];
     }
 
     //mp json_to_element
@@ -87,6 +88,16 @@ class Ic {
     //mp camera_set
     camera_set(camera) {
         this.cam = camera;
+    }
+
+    //mp other_cameras_reset
+    other_cameras_reset() {
+        this.other_cams = [];
+    }
+
+    //mp other_cameras_add
+    other_cameras_add(camera) {
+        this.other_cams.push(camera);
     }
 
     //mp redraw_nps
