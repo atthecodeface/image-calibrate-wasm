@@ -22,3 +22,6 @@
 .fg {
     z-index: 2;
 }
+#controls {
+    vertical-align: top;
+}

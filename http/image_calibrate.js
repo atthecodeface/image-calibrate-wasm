@@ -767,7 +767,6 @@ class Ic {
 
         this.nps.add_pt(new WasmNamedPoint("Me!", "#123456"));
         this.nps.add_pt(new WasmNamedPoint("Him!", "#543210"));
-        console.log(this.cam);
     }
 
     json_to_element( id ) {
@@ -848,7 +847,6 @@ class ImageCanvas {
         this.image.width = width;
         this.image_div.style.width = width+"px";
         this.image_div.style.height = height+"px";
-        console.log(image_div, width, height);
 
         this.drag = null;
 
@@ -934,6 +932,30 @@ class ImageCanvas {
         this.image_div.scrollTop -= dy;
         this.redraw_canvas();
     }
+
+    pms_select_file(file) {
+        if (file) {
+            file.text().then(
+                (value) => { this.load_pms(value);
+                           }
+            );
+        }
+    }
+//            const image = document.createElement('img');
+//            image.src = URL.createObjectURL(file);
+
+//        for(const file of curFiles) {
+//          const listItem = document.createElement('li');
+//          const para = document.createElement('p');
+//
+//          if(validFileType(file)) {
+//            para.textContent = `File name ${file.name}, file size ${returnFileSize(file.size)}.`;
+//            const image = document.createElement('img');
+//            image.src = URL.createObjectURL(file);
+//
+//            listItem.appendChild(image);
+//            listItem.appendChild(para);
+//          } else {
 }
 
 //a Top level init() =>
