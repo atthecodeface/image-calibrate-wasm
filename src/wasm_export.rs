@@ -77,6 +77,12 @@ impl WasmPointMappingSet {
         Ok(())
     }
 
+    //mp len
+    /// Get the number of mappings
+    pub fn len(&self) -> usize {
+        self.pms.mappings().len()
+    }
+
     //mp get_name
     /// Get the nth point mapping
     pub fn get_name(&self, n: usize) -> Result<String, String> {

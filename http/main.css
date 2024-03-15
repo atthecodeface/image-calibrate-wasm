@@ -1,23 +1,15 @@
-.canvaswrp {
+.image_canvas {
+    /* This sets the size of all the subelements due to the JS */
     width: 1200px;
-    height: 200px;
+    height: 400px;
     /* Make this a relative position to define a position context for 'absolute' to be meaningful relative to this block for 'can' items */
     position: relative;
 }
 
-.canvasdiv {
-    width: 1200px;
-    height: 200px;
+.image_div {
     overflow: scroll;
 }
-
-.image_canvas {
-    width: 1200px;
-    height: 200px;
-}
-.image {
-    }
-.can {
+.pos_abs {
     /* 
     Relative is relative to its desired location
        position: relative;

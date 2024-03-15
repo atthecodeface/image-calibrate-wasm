@@ -775,11 +775,16 @@ class Ic {
         ele.innerText = this.nps.to_json();
     }
 
+    pms_set(wpms) {
+        this.pms = wpms;
+    }
+
     redraw_nps(ctx, scale, left, top) {
         const cl = 6;
         const cw = 2;
         let names = this.nps.pts();
-        for (let i = 0; i < 10; i++) { 
+        let num_mappings = this.pms.len();
+        for (let i = 0; i < num_mappings; i++) { 
             const n = this.pms.get_name(i);
             const p = this.nps.get_pt(n);
             const xye = this.pms.get_xy_err(i);
@@ -794,19 +799,30 @@ class Ic {
         }
     }
     
-    redraw_canvas(id, scale, left, top) {
-        const canvas = document.getElementById(id);
+    redraw_pms(ctx, scale, left, top) {
+        const cl = 6;
+        const cw = 2;
+        let names = this.nps.pts();
+        let num_mappings = this.pms.len();
+        for (let i = 0; i < num_mappings; i++) { 
+            const n = this.pms.get_name(i);
+            const p = this.nps.get_pt(n);
+            const xye = this.pms.get_xy_err(i);
+            // const m = p.model();
+            ctx.fillStyle = p.color();
+            const x = xye[0];
+            const y = xye[1];
+            const sx = x*scale-left;
+            const sy = y*scale-top;
+            ctx.fillRect(sx-cl, sy-cw, cl*2, cw*2);
+            ctx.fillRect(sx-cw, sy-cl, cw*2, cl*2);
+        }
+    }
+    
+    redraw_canvas(canvas, scale, left, top) {
         const ctx = canvas.getContext("2d");
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        this.redraw_nps(ctx, scale, left, top);
-    }
-    resize_canvas( id, to_id ) {
-        const resize_to = document.getElementById(to_id);
-        const canvas = document.getElementById(id);
-        const ctx = canvas.getContext("2d");
-        canvas.width = resize_to.offsetWidth;
-        canvas.height = resize_to.offsetHeight;
-        this.redraw_canvas(id, canvas.width, 0, 0);
+        this.redraw_pms(ctx, scale, left, top);
     }
 }
 
@@ -823,11 +839,16 @@ class ImageCanvas {
         
         const width = this.div.offsetWidth;
         const height = this.div.offsetHeight;
+        this.width = width;
+        this.height = height;
 
         this.img_width = width;
-        this.image_div.width = width;
-        this.image_div.height = height;
+        this.canvas.width = width;
+        this.canvas.height = height;
         this.image.width = width;
+        this.image_div.style.width = width+"px";
+        this.image_div.style.height = height+"px";
+        console.log(image_div, width, height);
 
         this.drag = null;
 
@@ -838,10 +859,22 @@ class ImageCanvas {
         this.canvas.addEventListener('mouseout', function(e) {me.mouse_up(e);});
         this.canvas.addEventListener('mousemove', function(e) {me.mouse_move(e);});
 
-        this.ic.resize_canvas(can_id, img_div_id);
-        this.ic.redraw_canvas(can_id, width/6720, this.image_div.scrollLeft, this.image_div.scrollTop);
+        this.redraw_canvas();
+        this.image_div.width = width;
+        this.image_div.height = height;
+        }
+
+    redraw_canvas() {
+        this.ic.redraw_canvas(this.canvas, this.img_width/6720, this.image_div.scrollLeft, this.image_div.scrollTop);
     }
 
+    load_pms(pms_json) {
+        const wpms = new WasmPointMappingSet();
+        wpms.read_json(this.ic.nps, pms_json);
+        this.ic.pms_set(wpms);
+        this.redraw_canvas();
+    }
+    
     wheel(e) {
         console.log(e.offsetX, e.offsetY);
         if (e.ctrlKey) {
@@ -893,17 +926,17 @@ class ImageCanvas {
         this.image_div.scrollTop = ey * actual_scale - fy;
         
         this.image.width = new_width;
-        this.ic.resize_canvas('image_canvas', 'canvasdiv');
-        this.ic.redraw_canvas('image_canvas', new_width/6720, this.image_div.scrollLeft, this.image_div.scrollTop);
+        this.redraw_canvas();
     }
+
     scroll_by(dx, dy) {
         this.image_div.scrollLeft -= dx;
         this.image_div.scrollTop -= dy;
-        this.ic.redraw_canvas('image_canvas', this.img_width/6720, this.image_div.scrollLeft, this.image_div.scrollTop);
+        this.redraw_canvas();
     }
 }
 
 //a Top level init() =>
 init().then(() => {
-    window.ic = new ImageCanvas('canvaswrp', 'canvasdiv', 'image_canvas', 'image');
+    window.image_canvas = new ImageCanvas('image_canvas', 'image_div', 'canvas', 'image');
 });

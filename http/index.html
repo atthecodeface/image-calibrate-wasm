@@ -10,32 +10,48 @@
   </textbox>
   <p>
   <script type="module" src="./image_calibrate.js"></script>
-   <div id='canvaswrp'  class='canvaswrp'>
-   <div id="canvasdiv" class='canvasdiv can bg'>
-     <img class='image' id='image' src="images/4V3A6040.JPG"/>
-    </div>
-    <canvas class='can fg image_canvas' id='image_canvas'/>
-   </div>
-      <p>
-  <input class="widget_button" type="button" value="&#x21bb;" onclick="window.ic.json_to_element('json');"/>
-  <p>
-  <form>
-    <div>
+  <table>
+   <tr>
+   <td>
+   <table>
+   <tr>
+   <td>
+   <input class="widget_button" type="button" value="&#x21bb;" onclick="window.image_canvas.ic.json_to_element('json');"/>
+   </td>
+   </tr>
+   <tr>
+   <td>
       <label for="image_uploads">Choose PMS file (JSON)</label>
       <!-- input type="file" id="pms_uploads" name="pms_uploads" accept=".json" multiple -->
       <input type="file" id="pms_uploads" name="pms_uploads" accept=".json" multiple>      
-    </div>
-    <div class="preview" id="preview">
+   </td>
+   </tr>
+   <tr>
+   <td>
+   <div class="preview_wrap" id="preview_wrap" style='height:60px; overflow:scroll;'>
+   <div class="preview" id="preview">
       <p>No files currently selected for upload</p>
+   </div>
+   </div>
+   </td>
+   </tr>
+   </table>
+   </td>
+   </tr>
+  <tr>
+  <td>
+   <div id='image_canvas'  class='image_canvas'>
+   <div id="image_div" class='bg pos_abs image_div'>
+     <img id='image' class='image' src="images/4V3A6040.JPG"/>
     </div>
-    <div>
-      <button>Submit</button>
-    </div>
-  </form>
+    <canvas id='canvas' class='fg pos_abs' />
+   </div>
+   </tr>
+   </td>
+   </table>
   <script>
   const input = document.getElementById('pms_uploads');
   const preview = document.getElementById('preview');
-//    input.style.opacity = 0;
     input.addEventListener('change', updateImageDisplay);
 
 function updateImageDisplay() {
@@ -56,7 +72,10 @@ function updateImageDisplay() {
         text = `File name ${file.name}, file size ${returnFileSize(file.size)}.`;
         text += "" ;
         list.textContent = text;
-        file.text().then((value) => console.log(list.textContent+=value));
+        file.text().then((value) => {
+        window.image_canvas.load_pms(value);
+        }
+        );
         }
         }
     const fileTypes = [
