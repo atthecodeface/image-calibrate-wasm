@@ -1,0 +1,40 @@
+[package]
+authors = ["Gavin J Stark"]
+categories = ["wasm"]
+description = "A simple graph and algebra game"
+edition = "2021"
+name = "image_calibrate_wasm"
+readme = "README.md"
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = ">=0.2.92"
+geo-nd = "0.5"
+indent-display = "0.1"
+lexer-rs = "0.0.3"
+js-sys = ">=0.3.64"
+
+[dependencies.image_calibrate]
+version="0.1"
+path = "../glove/image_calibrate"
+
+[dependencies.web-sys]
+features = [
+  'console',
+  'CanvasRenderingContext2d',
+  'Document',
+  'EventTarget',
+  'Element',
+  'HtmlCanvasElement',
+  'HtmlElement',
+  'MouseEvent',
+  'Window',
+]
+version = ">=0.3.40"
+
+[profile.release]
+lto = true
+opt-level = 3

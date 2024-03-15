@@ -1,0 +1,32 @@
+.canvaswrp {
+    width: 1200px;
+    height: 200px;
+    /* Make this a relative position to define a position context for 'absolute' to be meaningful relative to this block for 'can' items */
+    position: relative;
+}
+
+.canvasdiv {
+    width: 1200px;
+    height: 200px;
+    overflow: scroll;
+}
+
+.image_canvas {
+    width: 1200px;
+    height: 200px;
+}
+.image {
+    }
+.can {
+    /* 
+    Relative is relative to its desired location
+       position: relative;
+     */
+    position: absolute;
+    }
+.bg {
+    z-index: 1;
+}
+.fg {
+    z-index: 2;
+}

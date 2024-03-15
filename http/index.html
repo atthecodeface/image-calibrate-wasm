@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <title>Image calibration</title>
+  </head>
+  <body>
+  <link href="main.css" rel="stylesheet" type="text/css">
+  <textbox id='json'>
+  </textbox>
+  <p>
+  <script type="module" src="./image_calibrate.js"></script>
+   <div id='canvaswrp'  class='canvaswrp'>
+   <div id="canvasdiv" class='canvasdiv can bg'>
+     <img class='image' id='image' src="images/4V3A6040.JPG"/>
+    </div>
+    <canvas class='can fg image_canvas' id='image_canvas'/>
+   </div>
+      <p>
+  <input class="widget_button" type="button" value="&#x21bb;" onclick="window.ic.json_to_element('json');"/>
+  <p>
+  <form>
+    <div>
+      <label for="image_uploads">Choose PMS file (JSON)</label>
+      <!-- input type="file" id="pms_uploads" name="pms_uploads" accept=".json" multiple -->
+      <input type="file" id="pms_uploads" name="pms_uploads" accept=".json" multiple>      
+    </div>
+    <div class="preview" id="preview">
+      <p>No files currently selected for upload</p>
+    </div>
+    <div>
+      <button>Submit</button>
+    </div>
+  </form>
+  <script>
+  const input = document.getElementById('pms_uploads');
+  const preview = document.getElementById('preview');
+//    input.style.opacity = 0;
+    input.addEventListener('change', updateImageDisplay);
+
+function updateImageDisplay() {
+// Delete the contents of preview
+      while(preview.firstChild) {
+        preview.removeChild(preview.firstChild);
+      }
+
+      const curFiles = input.files;
+      if(curFiles.length === 0) {
+        const para = document.createElement('p');
+        para.textContent = 'No files currently selected for upload';
+        preview.appendChild(para);
+      } else {
+        const file = curFiles[0];
+        const list = document.createElement('div');
+        preview.appendChild(list);
+        text = `File name ${file.name}, file size ${returnFileSize(file.size)}.`;
+        text += "" ;
+        list.textContent = text;
+        file.text().then((value) => console.log(list.textContent+=value));
+        }
+        }
+    const fileTypes = [
+        'application/json',
+    ];
+
+    function validFileType(file) {
+      return fileTypes.includes(file.type);
+    }
+
+    function returnFileSize(number) {
+      if(number < 1024) {
+        return number + 'bytes';
+      } else if(number > 1024 && number < 1048576) {
+        return (number/1024).toFixed(1) + 'KB';
+      } else if(number > 1048576) {
+        return (number/1048576).toFixed(1) + 'MB';
+      }
+    }
+//            const image = document.createElement('img');
+//            image.src = URL.createObjectURL(file);
+
+//        for(const file of curFiles) {
+//          const listItem = document.createElement('li');
+//          const para = document.createElement('p');
+//
+//          if(validFileType(file)) {
+//            para.textContent = `File name ${file.name}, file size ${returnFileSize(file.size)}.`;
+//            const image = document.createElement('img');
+//            image.src = URL.createObjectURL(file);
+//
+//            listItem.appendChild(image);
+//            listItem.appendChild(para);
+//          } else {
+
+</script>
+  </body>
+</html>
