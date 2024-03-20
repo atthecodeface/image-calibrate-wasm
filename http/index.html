@@ -5,55 +5,37 @@
     <title>Image calibration</title>
   </head>
   <body>
-  <link href="main.css" rel="stylesheet" type="text/css">
-  <p>
-  <script type="module" src="./image_calibrate.js"></script>
-  <table>
-   <tr>
-  <td>
-   <div id='image_canvas'  class='image_canvas'>
-   <div id="image_div" class='bg pos_abs image_div'>
-     <img id='image' class='image' src="images/4V3A6040.JPG"/>
-    </div>
-    <canvas id='canvas' class='fg pos_abs' />
-   </div>
-   </td>
-   <td id="controls">
-   <table>
-      <tr>
-      <td>
-      <label for="img_uploads">Image</label>
-      <input type="file" id="img_uploads" name="img_uploads" accept=".jpg" onchange="window.image_canvas.img_select_file(document.getElementById('img_uploads').files[0]);"/>      
-   </td>
-   </tr>
-      <tr>
-      <td>
-      <label for="nps_uploads">NPS (JSON)</label>
-      <input type="file" id="nps_uploads" name="nps_uploads" accept=".json" onchange="window.image_canvas.nps_select_file(document.getElementById('nps_uploads').files[0]);"/>      
-   </td>
-   </tr>
-   <tr>
-   <td>
-      <label for="camera_uploads">Camera (JSON)</label>
-      <input type="file" id="camera_uploads" name="camera_uploads" accept=".json" onchange="window.image_canvas.camera_select_file(document.getElementById('camera_uploads').files[0]);"/>
-      </td>
-      </tr>
-   <tr>
-   <td>
-      <label for="pms_uploads">PMS (JSON)</label>
-      <input type="file" id="pms_uploads" name="pms_uploads" accept=".json" onchange="window.image_canvas.pms_select_file(document.getElementById('pms_uploads').files[0]);"/>
-      </td>
-      </tr>
-   <tr>
-   <td>
-   <input class="widget_button" type="button" value="Show PMS JSON" onclick="window.image_canvas.ic.json_to_element('json');"/>
-   </td>
-   </tr>
-   </table>
-   </td>
-   </tr>
-   </table>
-  <textbox id='json'>
-  </textbox>
+    <link href="main.css" rel="stylesheet" type="text/css">
+    <p>
+      <script type="module" src="./image_calibrate.js"></script>
+      <table>
+        <tr>
+          <td>
+            <div id='image_canvas'  class='image_canvas'>
+            </div>
+          </td>
+          <td id="controls">
+            <table>
+              <tr>
+                <td>
+                  <label for="project_list">Choose a project:</label>
+                  <select type="text" id="project_list" name="project_list"/>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <input class="widget_button" type="button" value="Show NPS JSON" onclick="window.image_canvas.ic.json_to_element('json');"/>
+                </td>
+                <td>
+                  <input class="widget_button" type="button" value="Reorient" onclick="window.image_canvas.reorient();"/>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      <textbox id='json'>
+      </textbox>
+      <div id='Log'></div>
   </body>
 </html>

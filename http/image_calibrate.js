@@ -1,5 +1,219 @@
 //a Imports
 import init, {WasmCameraDatabase, WasmCameraInstance, WasmNamedPoint, WasmNamedPointSet, WasmPointMappingSet} from "../pkg/image_calibrate_wasm.js";
+//a Useful functions
+//fp is_array
+function is_array(obj) {
+    return Object.prototype.toString.call(obj) === "[object Array]";
+}
+
+//fp is_string
+function is_string(obj) {
+    return typeof obj === "string";
+}
+
+//fp is_float
+function is_float(obj) {
+    return typeof obj === "number";
+}
+
+//fp parse_json
+function parse_json(data) {
+    const regex = new RegExp("//[^\n]*", "g");
+    data = data.replaceAll(regex, "");
+    try {
+        const obj = JSON.parse(data);
+        return obj;
+    } catch (e) {
+        return;
+    }
+}
+
+//mp find_data_type
+function find_data_type(data) {
+    const obj = parse_json(data);
+    if (!obj) {
+        return;
+    }
+    if (obj["bodies"]) {
+        return "cdb";
+    }
+    if (obj["camera"] && obj["position"] && obj["direction"]) {
+        return "cam";
+    }
+    if (obj["cdb"] && obj["nps"] && obj["cips"]) {
+        return "proj";
+    }
+    if (is_array(obj) && obj.length>0) {
+        if (is_array(obj[0]))
+        {
+            if ((obj[0].length == 3) && is_string(obj[0][0]) && is_array(obj[0][1]) && is_float(obj[0][2])) {
+                return "pms";
+            }
+            if ((obj[0].length == 3) && is_string(obj[0][0]) && is_string(obj[0][1]) && is_array(obj[0][2])) {
+                return "nps";
+            }
+        }
+    }
+    return;
+}
+    
+
+//a Log
+class Log {
+    //fp constructor
+    constructor(div) {
+        this.log = [];
+        this.div = div;
+    }
+
+    //mp set_div
+    set_div(div) {
+        this.div = div;
+    }
+
+    //mp reset_log
+    reset_log() {
+        this.log = [];
+        this.fill_div();
+    }
+    
+    //ap is_empty
+    is_empty() {
+        return this.log.length==0;
+    }
+    
+    //ap log
+    log() {
+        return this.log;
+    }
+    
+    //mp add_log
+    add_log(severity, src, reason, error) {
+        this.log.push({ "severity":severity, "src":src, "reason":reason, "error":error});
+        this.fill_div();
+    }
+
+    //mp fill_div
+    fill_div() {
+        if (!this.div) {
+            return;
+        }
+        var     html = "";
+        for (const e of this.log) {
+            html += `${e.severity} : ${e.src} : ${e.reason} : ${e.error} : <br/>`;
+        }
+        this.div.innerHTML = html;
+    }
+    
+}
+
+//a Directory
+class Directory {
+    //fp constructor
+    constructor() {
+        this.files = {};
+    }
+
+    //mp contains_file
+    contains_file(suffix, root) {
+        if (!this.files[suffix]) {
+            return false;
+        }
+        if (!this.files[suffix][root]) {
+            return false;
+        }
+        return true;
+    }
+
+    //mp add_file
+    add_file(suffix, root) {
+        if (!this.files[suffix]) {
+            this.files[suffix] = {};
+        }
+        this.files[suffix][root] = true;
+    }
+
+    //mp delete_file
+    delete_file(suffix, root) {
+        if (!this.files[suffix]) {
+            return;
+        }
+        if (!this.files[suffix][root]) {
+            return;
+        }
+        delete(this.files[suffix][root]);
+        if (this.files[suffix].length == 0) {
+            delete(this.files[suffix]);
+        }
+    }
+
+    //mp files_of_type
+    files_of_type(suffix) {
+        if (!this.files[suffix]) {
+            return [];
+        }
+        return Object.keys(this.files[suffix]);
+    }
+}
+
+//a FileSet
+class FileSet {
+
+    //fp constructor
+    constructor(storage, prefix) {
+        this.storage = storage;
+        this.prefix = prefix;
+        this.load_dir();
+    }
+
+    //mp split_filename
+    split_filename(filename) {
+        const suffix = filename.split(".").pop();
+        if (suffix) {
+            const root = filename.slice(0, -suffix.length-1);
+            return [suffix, root];
+        } else {
+            return null;
+        }
+    }
+    
+    //mp load_dir
+    load_dir() {
+        this.directory = new Directory();
+        const n = this.storage.length;
+        const pl = this.prefix.length;
+        for (let i = 0; i < n; i++) {
+            let k = this.storage.key(i);
+            if (k.startsWith(this.prefix)) {
+                const f = k.slice(pl);
+                const s_r = this.split_filename(f);
+                if (s_r) {
+                    this.directory.add_file(s_r[0], s_r[1]);
+                }
+            }
+        }
+    }
+
+    //mp load_file
+    load_file(suffix, root) {
+        let f = this.prefix + root + "." + suffix;
+        return this.storage.getItem(f);
+    }
+
+    //mp save_file
+    save_file(suffix, root, data) {
+        let f = this.prefix + root + "." + suffix;
+        this.storage.setItem(f, data);
+        this.directory.add_file(suffix, root);
+    }
+
+    //mp dir
+    dir() {
+        return this.directory;
+    }
+
+    //zz All done
+}
 
 //a Constants
 const camera_db_json = `
@@ -56,16 +270,166 @@ const camera_inst_json = `
 
 `;
 
+//a Project
+class Project {
+
+    //fp constructor
+    constructor(fs, name) {
+        this.fs = fs;
+        this.name = name;
+        this.cdb = null;
+        this.nps = null;
+        this.cips = [];
+    }
+
+    //mp is_valid
+    is_valid() {
+        return (this.cdb && this.nps && (this.cips.length>0));
+    }
+
+    //mp as_json
+    as_json() {
+        const obj = {
+            "name": this.name,
+            "nps": this.nps,
+            "cdb": this.cdb,
+            "cips": this.cips,
+        };
+        return JSON.stringify(obj);
+    }
+
+    //mp from_json
+    from_json(name, json) {
+        const obj = parse_json(json);
+        if (!obj) {
+            window.log.add_log(5, "project", "json", `Failed to parse json for project ${name}`);
+            return;
+        }
+        this.name = name;
+        this.nps = null;
+        this.cdb = null;
+        this.cips = [];
+        if (is_string(obj.nps)) {
+            this.nps = obj.nps;
+        }
+        if (is_string(obj.cdb)) {
+            this.cdb = obj.cdb;
+        }
+        if (!is_array(obj.cips)) {
+            return;
+        }
+        for (const cp of obj.cips) {
+            if (is_string(cp[0]) &&  is_string(cp[1]) && is_string(cp[2])) {
+                this.cips.push(cp);
+            }
+        }
+    }
+
+    //mp save
+    save() {
+        this.fs.save_file("proj",this.name,this.as_json());
+    }
+
+    //mp load
+    load() {
+        let json = this.fs.load_file("proj",this.name);
+        if (json) {
+            this.from_json(this.name, json);
+        } else {
+            window.log.add_log(5, "project", "load", `Failed to load json for project ${this.name}`);
+        }
+    }
+}
+
 //a Ic
 class Ic {
 
     //fp constructor
-    constructor() {
+    constructor(file_set) {
+        this.file_set = file_set;
+        this.project = new Project(this.file_set, "None");
+        this.cip_of_project = 0;
         this.cdb = new WasmCameraDatabase(camera_db_json);
         this.nps = new WasmNamedPointSet();
         this.cam = new WasmCameraInstance(this.cdb, camera_inst_json);
         this.pms = new WasmPointMappingSet();
+        this.img_src = "";
         this.other_cams = [];
+    }
+
+    //mp load_proj
+    load_proj(name) {
+        const data = this.file_set.load_file("proj", name);
+        if (!data) {
+            window.log.add_log(5, "project", "load", `Failed to read project ${name}`);
+            return;
+        }
+        this.project.from_json(name, data);
+        if (!this.project.is_valid()) {
+            window.log.add_log(5, "project", "load", `Failed to parse project data for ${name}`);
+            return;
+        }
+
+        const cdb_json = this.file_set.load_file("cdb", this.project.cdb);
+        const nps_json = this.file_set.load_file("nps", this.project.nps);
+        if (!cdb_json) {
+            window.log.add_log(5, "project", "load", `Failed to read cdb ${this.project.cdb} for project ${name}`);
+            return;
+        }
+        if (!nps_json) {
+            window.log.add_log(5, "project", "load", `Failed to read nps ${this.project.nps} for project ${name}`);
+            return;
+        }
+
+        this.cdb = new WasmCameraDatabase(cdb_json);
+
+        this.nps = new WasmNamedPointSet();
+        this.nps.read_json(nps_json);
+
+        this.select_cip_of_project(0);
+        window.log.add_log(0, "project", "load", `Read project ${name}`);
+    }
+
+    //mp select_cip_of_project
+    select_cip_of_project(n) {
+
+        this.cip_of_project = n;
+        const cip = this.project.cips[this.cip_of_project];
+        const cam_json = this.file_set.load_file("cam", cip[0]);
+        const pms_json = this.file_set.load_file("pms", cip[2]);
+
+        if (!cam_json) {
+            window.log.add_log(5, "project", "cip", `Failed to read camera ${this.project.cam} for project ${name}`);
+            return;
+        }
+        if (!pms_json) {
+            window.log.add_log(5, "project", "cip", `Failed to read PMS ${this.project.pms} for project ${name}`);
+            return;
+        }
+
+        if (this.cdb) {
+            this.cam = new WasmCameraInstance(this.cdb, cam_json);
+        }
+
+        this.pms = new WasmPointMappingSet();
+        if (this.nps) {
+            this.pms.read_json(this.nps, pms_json);
+        }
+
+        const img = cip[1];
+        this.img_src = img;
+        window.log.add_log(0, "project", "load", `Selected CIP ${this.cip_of_project}`);
+    }
+
+    //mp save_all
+    save_all(root) {
+        const nps_json = this.nps.to_json();
+        window.localStorage.setItem(`${root}.nps`, nps_json);
+        const data = window.localStorage.getItem(`{$root}.nps`);
+        if (typeof data !== "string") {
+            return;
+        }
+        this.dir(window.localStorage);
     }
 
     //mp json_to_element
@@ -78,6 +442,7 @@ class Ic {
     nps_set(wnps) {
         this.nps = wnps;
         this.pms = new WasmPointMappingSet();
+        this.save_all("root");
     }
 
     //mp pms_set
@@ -141,25 +506,35 @@ class Ic {
             ctx.stroke();
         }
     }
-    
+
+    //mp redraw_canvas
     redraw_canvas(canvas, scale, left, top) {
         const ctx = canvas.getContext("2d");
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         this.redraw_nps(ctx, scale, left, top);
         this.redraw_pms(ctx, scale, left, top);
     }
+
+    //zz All done
 }
 
 //a ImageCanvas
 class ImageCanvas {
     //fp constructor
-    constructor(wrp_id, img_div_id, can_id, img_id) {
-        this.div = document.getElementById(wrp_id);
-        this.canvas = document.getElementById(can_id);
-        this.image_div = document.getElementById(img_div_id);
-        this.image = document.getElementById(img_id);
+    constructor(file_set, image_div_id) {
+        this.div = document.getElementById(image_div_id);
+        this.image_div = document.createElement("div");
+        this.image_div.className = "bg pos_abs image_div";
+        this.canvas = document.createElement("canvas");
+        this.canvas.className = "fg pos_abs";
+        this.div.appendChild(this.image_div);
+        this.div.appendChild(this.canvas);
+        this.image = document.createElement("img");
+        this.image.className = "image";
+        this.image_div.appendChild(this.image);
 
-        this.ic = new Ic();
+        this.file_set = file_set;
+        this.ic = new Ic(this.file_set);
         
         const width = this.div.offsetWidth;
         const height = this.div.offsetHeight;
@@ -185,39 +560,38 @@ class ImageCanvas {
         this.redraw_canvas();
         this.image_div.width = width;
         this.image_div.height = height;
+
+        this.image.addEventListener('load', function(e) { me.redraw_canvas(); } );
+        this.load_proj("nac_proj.json");
         }
+
+    //mp update_info
+    update_info() {
+        console.log(this.ic.cam.location());
+        console.log(this.ic.cam.orientation());
+    }
 
     //mp redraw_canvas
     redraw_canvas() {
-        this.ic.redraw_canvas(this.canvas, this.img_width/6720, this.image_div.scrollLeft, this.image_div.scrollTop);
+        const src_width = this.image.naturalWidth;
+        var scale = 0.0;
+        if (src_width > 0) {
+            scale = this.img_width/src_width;
+        }
+        this.update_info();
+        this.ic.redraw_canvas(this.canvas, scale, this.image_div.scrollLeft, this.image_div.scrollTop);
     }
 
-    //mp load_nps
-    load_nps(nps_json) {
-        const wnps = new WasmNamedPointSet();
-        wnps.read_json(nps_json);
-        this.ic.nps_set(wnps);
+
+    //mp load_proj
+    load_proj(proj) {
+        this.ic.load_proj(proj);
+        this.image.src = this.ic.img_src;
         this.redraw_canvas();
     }
 
-    //mp load_camera
-    load_camera(camera_json) {
-        const camera = new WasmCameraInstance(this.ic.cdb, camera_json);
-        this.ic.camera_set(camera);
-        this.redraw_canvas();
-    }
-    
-    //mp load_pms
-    load_pms(pms_json) {
-        const wpms = new WasmPointMappingSet();
-        wpms.read_json(this.ic.nps, pms_json);
-        this.ic.pms_set(wpms);
-        this.redraw_canvas();
-    }
-    
     //mi wheel
     wheel(e) {
-        console.log(e.offsetX, e.offsetY);
         if (e.ctrlKey) {
             this.zoom_image_canvas((200-e.deltaY)/200, e.offsetX, e.offsetY);
         } else {
@@ -235,7 +609,6 @@ class ImageCanvas {
     //mi mouse_move
     mouse_move(e) {
         if (this.drag) {
-            console.log(this.drag, this.drag[0], this.drag[1]);
             if (e.altKey) {
                 this.zoom_image_canvas((200+e.movementY)/200, this.drag[0], this.drag[1]);
             } else {
@@ -281,47 +654,162 @@ class ImageCanvas {
         this.redraw_canvas();
     }
 
-    //mp img_select_file
-    img_select_file(file) {
-        if (file) {
-            this.image.src = URL.createObjectURL(file);
-        }
-    }
-
-    //mp nps_select_file
-    nps_select_file(file) {
-        if (file) {
-            file.text().then(
-                (value) => { this.load_nps(value);
-                           }
-            );
-        }
-    }
-
-    //mp camera_select_file
-    camera_select_file(file) {
-        if (file) {
-            file.text().then(
-                (value) => { this.load_camera(value);
-                           }
-            );
-        }
-    }
-
-    //mp pms_select_file
-    pms_select_file(file) {
-        if (file) {
-            file.text().then(
-                (value) => { this.load_pms(value);
-                           }
-            );
-        }
+    //mp reorient
+    reorient() {
+        console.log(this.ic.cam.to_json());
+        console.log(this.ic.cam.reorient_using_rays_from_model(this.ic.pms));
+        this.redraw_canvas();
     }
 
     //zz All done
 }
 
+//a Browser
+class Browser {
+    //fp constructor
+    constructor(file_set, browser) {
+        this.file_set = file_set;
+        this.browser = browser;
+        this.repopulate();
+    }
+
+    //mp repopulate
+    repopulate() {
+        while (this.browser.firstChild) {
+            this.browser.removeChild(this.browser.firstChild);
+        }
+
+        const cdb_contents = [];
+        for (const f of window.file_set.dir().files_of_type("cdb")) {
+            let t = this.file_set.load_file("cdb", f);
+            const obj = parse_json(t);
+            var bodies_html = "";
+            for (const b of obj.bodies) {
+                bodies_html += `${b.name}<br>`;
+            }
+            var lenses_html = "";
+            for (const l of obj.lenses) {
+                lenses_html += `${l.name}<br>`;
+            }
+            cdb_contents.push( [f, bodies_html, lenses_html] );
+        }
+        this.create_file_table("cdb", "Camera Database", ["Filename", "Bodies", "Lenses"], cdb_contents);
+
+        const proj_contents = [];
+        for (const f of window.file_set.dir().files_of_type("proj")) {
+            let t = this.file_set.load_file("proj", f);
+            const obj = parse_json(t);
+            proj_contents.push( [f, obj.cdb, obj.nps, obj.cips.length] );
+        }
+        this.create_file_table("proj", "Projects", ["Filename", "Cdb", "Nps", "Number CIP"], proj_contents);
+
+        const nps_contents = [];
+        for (const f of window.file_set.dir().files_of_type("nps")) {
+            let t = this.file_set.load_file("nps", f);
+            const obj = parse_json(t);
+            const num_pts = obj.length;
+            nps_contents.push( [f, `${num_pts}`] );
+        }
+        this.create_file_table("nps", "Named PointSets", ["Filename", "Number of points"], nps_contents);
+
+        const pms_contents = [];
+        for (const f of window.file_set.dir().files_of_type("pms")) {
+            let t = this.file_set.load_file("pms", f);
+            const obj = parse_json(t);
+            const num_pts = obj.length;
+            pms_contents.push( [f, `${num_pts}`] );
+        }
+        this.create_file_table("pms", "Point-mapping Sets", ["Filename", "Number of points"], pms_contents);
+
+        const cam_contents = [];
+        for (const f of window.file_set.dir().files_of_type("cam")) {
+            let t = this.file_set.load_file("cam", f);
+            const obj = parse_json(t);
+            const cam_html = obj.camera.body + "<br>" + obj.camera.lens + "<br>Focus distance " + obj.camera.mm_focus_distance + "mm";
+            const posn_html = obj.position[0].toFixed(2) + ", " + obj.position[1].toFixed(2) + ", " + obj.position[2].toFixed(2);
+            cam_contents.push( [f, cam_html, posn_html] );
+        }
+        this.create_file_table("cam", "Camera Placements", ["Filename", "Camera", "Position"], cam_contents);
+    }
+
+    //mp create_file_table
+    create_file_table( table_classes, title, headings, contents) {
+        const heading = document.createElement("h1");
+        heading.className = "browser_ft_heading"
+        heading.innerText = title;
+        
+        const table = document.createElement("table");
+        table.className = "browser_table "+table_classes;
+        var tr;
+
+        tr = document.createElement("tr");
+        var i = 0;
+        for (const h of headings) {
+            const th = document.createElement("th");
+            th.innerText = h;
+            th.className = "th"+i;
+            i += 1;
+            tr.appendChild(th);
+        }
+        table.appendChild(tr);
+
+        for (const c of contents) {
+            tr = document.createElement("tr");
+            for (const d of c) {
+                const td = document.createElement("td");
+                td.innerHTML = d;
+                tr.appendChild(td);
+            }
+            table.appendChild(tr);
+        }
+        this.browser.appendChild(heading);
+        this.browser.appendChild(table);
+    }
+
+    //mp upload_files
+    upload_files(files) {
+        for (const file of files) {
+            file.text().then(
+                (value) => {
+                    const dt = find_data_type(value);
+                    if (dt) {
+                        window.log.add_log(0, "browser", "upload", `Uploaded ${file.name} of type ${dt}`);
+                        this.file_set.save_file(dt, file.name, value);
+                        this.repopulate();
+                    } else {
+                        window.log.add_log(5, "browser", "upload", `Could not determine type of ${file.name}`);
+                    }
+                }
+            );
+        }
+    }
+
+}
+
 //a Top level init() =>
 init().then(() => {
-    window.image_canvas = new ImageCanvas('image_canvas', 'image_div', 'canvas', 'image');
+    window.log = new Log(document.getElementById("Log"));
+    window.file_set = new FileSet(window.localStorage, "nac/");
+    const browser = document.getElementById("FileBrowser");
+    if (browser) {
+        window.browser = new Browser(file_set, browser);
+    }
+    const image_canvas = document.getElementById("image_canvas");
+    if (image_canvas) {
+        window.image_canvas = new ImageCanvas(file_set, 'image_canvas');
+    }
+    const project_list = document.getElementById("project_list");
+    if (project_list) {
+        const me = project_list;
+        project_list.addEventListener('click', function(value) {window.image_canvas.load_proj(me.selectedOptions[0].value);} );
+        while (project_list.firstChild) {
+            project_list.removeChild(project_list.firstChild);
+        }
+        for (const p of window.file_set.dir().files_of_type("proj")) {
+            const opt = document.createElement("option");
+            opt.setAttribute("value", p);
+            opt.innerText = p;
+            project_list.appendChild(opt);
+        }
+    }
 });

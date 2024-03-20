@@ -2,7 +2,10 @@
 use js_sys::Array;
 use wasm_bindgen::prelude::*;
 
-use image_calibrate::{CameraDatabase, CameraInstance, Color, NamedPointSet, PointMappingSet};
+use image_calibrate::{
+    CameraAdjustMapping, CameraDatabase, CameraInstance, CameraView, Color, NamedPointSet,
+    PointMappingSet,
+};
 
 //a WasmCameraDatabase
 //tp WasmCameraDatabase
@@ -43,6 +46,18 @@ impl WasmCameraInstance {
         Ok(Self { camera })
     }
 
+    //mp location
+    pub fn location(&self) -> Result<Box<[f64]>, String> {
+        let xyz: [f64; 3] = self.camera.location().into();
+        Ok(Box::new(xyz))
+    }
+
+    //mp orientation
+    pub fn orientation(&self) -> Result<Box<[f64]>, String> {
+        let q: [f64; 4] = self.camera.direction().into();
+        Ok(Box::new(q))
+    }
+
     //mp map_model
     pub fn map_model(&self, pt: &[f64]) -> Result<Box<[f64]>, String> {
         if pt.len() != 3 {
@@ -52,6 +67,30 @@ impl WasmCameraInstance {
             let pxy: [f64; 2] = self.camera.map_model(model).into();
             Ok(Box::new(pxy))
         }
+    }
+
+    //mp direction_of_pt
+    pub fn direction_of_pt(&self, pt: &[f64]) -> Result<Box<[f64]>, String> {
+        if pt.len() != 2 {
+            Err("Expected frame point (x,y)".into())
+        } else {
+            let pxy: [f64; 2] = [pt[0], pt[1]].into();
+            let txty = self.camera.px_abs_xy_to_camera_txty(pxy.into());
+            let model_dir: [f64; 3] = self.camera.camera_txty_to_world_dir(&txty).into();
+            Ok(Box::new(model_dir))
+        }
+    }
+
+    //cp to_json
+    #[wasm_bindgen]
+    pub fn to_json(&self) -> Result<String, JsValue> {
+        Ok(self.camera.to_json()?)
+    }
+
+    //mp reorient_using_rays_from_model
+    pub fn reorient_using_rays_from_model(&mut self, wpms: &WasmPointMappingSet) -> f64 {
+        self.camera
+            .reorient_using_rays_from_model(wpms.pms.mappings())
     }
 }
 
