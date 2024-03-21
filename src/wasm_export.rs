@@ -3,8 +3,8 @@ use js_sys::Array;
 use wasm_bindgen::prelude::*;
 
 use image_calibrate::{
-    CameraAdjustMapping, CameraDatabase, CameraInstance, CameraView, Color, NamedPointSet,
-    PointMappingSet,
+    CameraAdjustMapping, CameraDatabase, CameraInstance, CameraProjection, CameraView, Color,
+    NamedPointSet, PointMappingSet,
 };
 
 //a WasmCameraDatabase
@@ -53,9 +53,20 @@ impl WasmCameraInstance {
     }
 
     //mp orientation
-    pub fn orientation(&self) -> Result<Box<[f64]>, String> {
+    pub fn orientation(&self) -> Box<[f64]> {
         let q: [f64; 4] = self.camera.direction().into();
-        Ok(Box::new(q))
+        Box::new(q)
+    }
+
+    //mp focus_distance
+    pub fn focus_distance(&self) -> f64 {
+        self.camera.focus_distance()
+    }
+
+    //mp set_focus_distance
+    pub fn set_focus_distance(&mut self, mm_focus_distance: f64) -> f64 {
+        self.camera.set_focus_distance(mm_focus_distance);
+        self.camera.focus_distance()
     }
 
     //mp map_model
@@ -87,11 +98,24 @@ impl WasmCameraInstance {
         Ok(self.camera.to_json()?)
     }
 
+    //mp locate_using_model_lines
+    pub fn locate_using_model_lines(&mut self, wpms: &WasmPointMappingSet) -> f64 {
+        self.camera.locate_using_model_lines(&wpms.pms)
+    }
+
+    //mp orient_using_rays_from_model
+    pub fn orient_using_rays_from_model(&mut self, wpms: &WasmPointMappingSet) -> f64 {
+        self.camera
+            .orient_using_rays_from_model(wpms.pms.mappings())
+    }
+
     //mp reorient_using_rays_from_model
     pub fn reorient_using_rays_from_model(&mut self, wpms: &WasmPointMappingSet) -> f64 {
         self.camera
             .reorient_using_rays_from_model(wpms.pms.mappings())
     }
+
+    //zz All done
 }
 
 //a WasmPointMappingSet
@@ -228,7 +252,7 @@ impl WasmNamedPointSet {
     #[wasm_bindgen]
     pub fn add_pt(&mut self, wnp: WasmNamedPoint) -> Result<(), JsValue> {
         let color: Color = wnp.color.as_str().try_into()?;
-        self.nps.add_pt(&wnp.name, color, wnp.model.into());
+        self.nps.add_pt(&wnp.name, color, Some(wnp.model.into()));
         Ok(())
     }
 

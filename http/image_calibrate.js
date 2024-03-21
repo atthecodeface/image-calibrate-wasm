@@ -37,7 +37,7 @@ function find_data_type(data) {
     if (obj["bodies"]) {
         return "cdb";
     }
-    if (obj["camera"] && obj["position"] && obj["direction"]) {
+    if (obj["body"] && obj["lens"] && obj["position"] && obj["direction"]) {
         return "cam";
     }
     if (obj["cdb"] && obj["nps"] && obj["cips"]) {
@@ -259,11 +259,9 @@ const camera_db_json = `
 `;
 const camera_inst_json = `
 {
-  "camera": {
     "body": "Canon EOS 5D mark IV",
     "lens": "EF50mm f1.8",
-    "mm_focus_distance": 453.0
-  },
+    "mm_focus_distance": 453.0,
     "position": [ 0.0, 0.0, 0.0 ],
     "direction": [ 0.0, 0.0, 0.0, 1.0 ]
 }
@@ -399,11 +397,11 @@ class Ic {
         const pms_json = this.file_set.load_file("pms", cip[2]);
 
         if (!cam_json) {
-            window.log.add_log(5, "project", "cip", `Failed to read camera ${this.project.cam} for project ${name}`);
+            window.log.add_log(5, "project", "cip", `Failed to read camera JSON file '${cip[0]}' ${this.project.cam} for project  ${this.project.name} CIP ${n}`);
             return;
         }
         if (!pms_json) {
-            window.log.add_log(5, "project", "cip", `Failed to read PMS ${this.project.pms} for project ${name}`);
+            window.log.add_log(5, "project", "cip", `Failed to read PMS JSON file '${cip[2]}' ${this.project.pms} for project  ${this.project.name} CIP ${n}`);
             return;
         }
 
@@ -418,7 +416,7 @@ class Ic {
 
         const img = cip[1];
         this.img_src = img;
-        window.log.add_log(0, "project", "load", `Selected CIP ${this.cip_of_project}`);
+        window.log.add_log(0, "project", "load", `Selected CIP ${this.cip_of_project} of ${this.project.name} img ${img}`);
     }
 
     //mp save_all
@@ -567,8 +565,8 @@ class ImageCanvas {
 
     //mp update_info
     update_info() {
-        console.log(this.ic.cam.location());
-        console.log(this.ic.cam.orientation());
+        console.log("Location", this.ic.cam.location());
+        console.log("Orientation", this.ic.cam.orientation());
     }
 
     //mp redraw_canvas
@@ -658,6 +656,21 @@ class ImageCanvas {
     reorient() {
         console.log(this.ic.cam.to_json());
         console.log(this.ic.cam.reorient_using_rays_from_model(this.ic.pms));
+        this.redraw_canvas();
+    }
+
+    //mp set_focus_distance
+    set_focus_distance(f) {
+        this.ic.cam.set_focus_distance(f);
+        console.log("Located with error", this.ic.cam.locate_using_model_lines(this.ic.pms));
+        console.log("Oriented error", this.ic.cam.orient_using_rays_from_model(this.ic.pms));
+        this.redraw_canvas();
+    }
+
+    //mp select_cip_of_project
+    select_cip_of_project(n) {
+        this.ic.select_cip_of_project(n);
+        this.image.src = this.ic.img_src;
         this.redraw_canvas();
     }
 

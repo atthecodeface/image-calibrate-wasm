@@ -485,7 +485,7 @@ class CamModelLine:
             merr = e_fn(mp)
             use_left = True
             if merr < errs[0]:
-                if merr < errs[1]:
+                if merr > errs[1]:
                     use_left = False
                     pass
                 pass
@@ -500,6 +500,40 @@ class CamModelLine:
             pass
         new_p = pts[0]
         new_err = errs[0]
+        if new_err < e_p:
+            return (True, new_p)
+        return (False, p)
+    #f better_pt
+    def better_pt(self, e_fn, p, max_d=0.1, divs=20):
+        """Look at the direction required to get the error function reduce
+
+        Go by at most max_d distance.
+
+        Bisect the range of (p, p-by-max_distance), and choose the
+        left or right subrange depending on which gives the closest
+        match to the desired e_fn
+
+        """
+        e_p = e_fn(p)
+        dcdp = self.dxyz(e_fn, p)
+        dcdp = dcdp.scale(-1)
+        dcdp = dcdp.scale(max_d)
+        for i in range(divs):
+            pts = (p.sub(dcdp), p, p.add(dcdp))
+            errs = (e_fn(pts[0]),e_fn(pts[1]),e_fn(pts[2]))
+            dcdp = dcdp.scale(0.75)
+            if errs[0]< errs[1] and errs[0]<errs[2]:
+                p = pts[0]
+                pass
+            elif errs[2]< errs[1] and errs[2]<errs[0]:
+                p = pts[2]
+                pass
+            else:
+                p = pts[1]
+                pass
+            pass
+        new_p = pts[1]
+        new_err = errs[1]
         if new_err < e_p:
             return (True, new_p)
         return (False, p)
@@ -583,10 +617,10 @@ while True:
     p = m_p[1]
     pass
 
-nac = {"2cm ruler":[0.0,30.0,0.0],
+nac = {"2cm ruler":[-0.5,30.0,1.5],
        "7cm ruler":[1.0,-20.0,0.0],
-       "1 tl game":[2.0,0.2,90.5],
-       "M middle":[69.0,16.2,93.5],
+       "1 tl game":[1.5,0.2,92.0],
+       "M middle":[68.5,16.2,95.0],
        "5 tl text":[0,105.0,92.0],
        }
 pms_40 = {"M middle": ([4111.0,1182.0], [ -0.6914794281857799, -0.6966619453239863, 0.1910977088645111 ]),
@@ -609,7 +643,10 @@ pms_42 = {"M middle": ([ 3600,879], [ -0.6595676086166138, -0.7336831088605741, 
           "5 tl text": ([ 905,2425], [ -0.4293342341691295, -0.8528344344550153, 0.29722978110916365 ]),
        }
 
-pms = pms_41
+pms = pms_42
+# pms_40: Better location -248.41, -292.10, 187.44 : err 0.2353285721989643
+# pms_41: Better location  -67.63, -264.29, 271.44 : err 0.17429389698026834
+# pms_42: Better location -268.76,  -94.90, 262.31 : err 0.642618569138793
 for k in nac:
     nac[k] = Vec(nac[k])
     pass
@@ -642,6 +679,9 @@ def total_error(p):
     return err
 
 pts = cl_x.build_surface(30, 500)
+#for p in pts:
+#    print(p)
+#    pass
 min_err = 1E40
 best_pt = None
 for p in pts:
@@ -660,7 +700,7 @@ while True:
     if not m_pt[0]:
         break
     better_pt = m_pt[1]
-    print("Better point ", better_pt)
+    print("Better point ", better_pt, total_error(better_pt))
     pass
 
 print("Calculate enclosing spheres")
@@ -698,6 +738,7 @@ sphere2 = Sphere(Vec((11,0,0)), 2)
 c = sphere1.intersection(sphere2)
 print(sphere1, sphere2, c)
 #a Investigation: find best point for 4v3a6040
+# plot_implicit(f_xyz, cxyz=(0, 0, 0), sz=400, c=6.0, nc=20, res=30)
 # This has three islands
 # plot_implicit(f_xyz, cxyz=(0, 0, 0), sz=400, c=4.0, nc=20, res=30)
 # This has one island centred on (-240+-20, -290+-30, 190+-40)
