@@ -20,6 +20,18 @@
             <table>
               <tr>
                 <td colspan=3>
+                  <input class="widget_button" type="button" value="-" onclick="window.image_canvas.zoom_by(1/1.1);"/>
+                  <input type="range" id="zoom" name="zoom" step="0.1" min="0" max="11" oninput="window.image_canvas.zoom_by();"/>
+                  <input class="widget_button" type="button" value="+" onclick="window.image_canvas.zoom_by(1.1);"/>
+                   <label for="zoom">Zoom</label>
+                </td>
+              </tr>
+              <tr>
+                <td colspan=3 id="cursor_info"> 
+                </td>
+              </tr>
+              <tr>
+                <td colspan=3>
                   <label for="project_list">Choose a project:</label>
                   <select type="text" id="project_list" name="project_list"/>
                 </td>
@@ -43,11 +55,17 @@
               </tr>
               <tr>
                 <td colspan=3>
-                  <label>Camera info</label>
+                  <input class="widget_button" type="button" value="FD +" onclick="window.image_canvas.set_focus_distance(null,1);"/>
+                  <input class="widget_button" type="button" value="FD -" onclick="window.image_canvas.set_focus_distance(null,-1);"/>
                 </td>
               </tr>
               <tr>
                 <td colspan=3 id="camera_info">
+                </td>
+              </tr>
+              <tr>
+                <td colspan=3>
+                      <input class="widget_button" type="button" value="Save CIP" onclick="window.image_canvas.save_cip();"/>
                 </td>
               </tr>
             </table>

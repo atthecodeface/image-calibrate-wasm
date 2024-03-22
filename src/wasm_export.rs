@@ -157,6 +157,12 @@ impl WasmPointMappingSet {
         Ok(())
     }
 
+    //cp to_json
+    #[wasm_bindgen]
+    pub fn to_json(&self) -> Result<String, JsValue> {
+        Ok(self.pms.to_json()?)
+    }
+
     //mp len
     /// Get the number of mappings
     pub fn len(&self) -> usize {
@@ -182,6 +188,44 @@ impl WasmPointMappingSet {
             .map(|m| [m.screen()[0], m.screen()[1], m.error()].into())
             .ok_or("Index out of range".into())
     }
+
+    //mp mapping_of_name
+    pub fn mapping_of_name(&self, name: &str) -> Option<usize> {
+        self.pms
+            .mappings()
+            .iter()
+            .enumerate()
+            .find(|(_, m)| m.name() == name)
+            .map(|(n, _)| n)
+            .into()
+    }
+
+    //mp add_mapping
+    pub fn add_mapping(
+        &mut self,
+        wnps: &WasmNamedPointSet,
+        name: &str,
+        screen: &[f64],
+        error: f64,
+    ) -> Result<bool, String> {
+        if screen.len() != 2 {
+            Err("Expected frame point (x,y)".into())
+        } else {
+            let pxy: [f64; 2] = [screen[0], screen[1]].into();
+            Ok(self.pms.add_mapping(&wnps.nps, name, &pxy.into(), error))
+        }
+    }
+
+    //mp remove_mapping
+    pub fn remove_mapping(&mut self, n: usize) -> Result<(), String> {
+        if !self.pms.remove_mapping(n) {
+            Err("Index out of range".into())
+        } else {
+            Ok(())
+        }
+    }
+
+    //zz All done
 }
 
 //a WasmNamedPoint

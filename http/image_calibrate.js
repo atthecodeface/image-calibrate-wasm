@@ -29,7 +29,7 @@ function parse_json(data) {
 }
 
 //mp quaternion_x_vector
-function quaternion_x_vector(q, v) {
+function quaternion_x_vector(q, v, add=[0,0,0]) {
     const r = -q[3];
     const i = q[0];
     const j = q[1];
@@ -43,31 +43,23 @@ function quaternion_x_vector(q, v) {
     const z = (r * r - i * i - j * j + k * k) * v[2]
         + 2 * (k * j + r * i) * v[1]
         + 2 * (k * i - r * j) * v[0];
-    return [x, y, z];
-}
-
-//mp quaternion_x_X
-function quaternion_x_X(q, v) {
-    return quaternion_x_vector(q, [1,0,0]);
-}
-
-//mp quaternion_x_Y
-function quaternion_x_Y(q, v) {
-    return quaternion_x_vector(q, [0,1,0]);
-}
-
-//mp quaternion_x_Z
-function quaternion_x_Z(q, v) {
-    return quaternion_x_vector(q, [0,0,1]);
+    return [x+add[0], y+add[1], z+add[2]];
 }
 
 //mp html_position
-function html_position(c) {
-    c = [c[0].toFixed(2),
-         c[1].toFixed(2),
-         c[2].toFixed(2),
-        ];
-    return `${c[0]}, ${c[1]}, ${c[2]}`;
+function html_position(c, dp=2) {
+    if (c.length == 3) {
+        c = [c[0].toFixed(dp),
+             c[1].toFixed(dp),
+             c[2].toFixed(dp),
+            ];
+        return `${c[0]}, ${c[1]}, ${c[2]}`;
+    } else {
+        c = [c[0].toFixed(dp),
+             c[1].toFixed(dp),
+            ];
+        return `(${c[0]}, ${c[1]})`;
+    }
 }
 
 //mp html_clear
@@ -77,22 +69,32 @@ function html_clear(id) {
     }
 }
 
+//mp html_add_ele
+function html_add_ele(parent, type, classes) {
+    const ele = document.createElement(type);
+    ele.classes = classes;
+    parent.append(ele);
+    return ele;
+}
+
 //mp html_table
 function html_table(table_classes, headings, contents) {
     const table = document.createElement("table");
     table.className = "browser_table "+table_classes;
     var tr;
 
-    tr = document.createElement("tr");
-    var i = 0;
-    for (const h of headings) {
-        const th = document.createElement("th");
-        th.innerText = h;
-        th.className = "th"+i;
-        i += 1;
-        tr.appendChild(th);
+    if (headings) {
+        tr = document.createElement("tr");
+        let i = 0;
+        for (const h of headings) {
+            const th = document.createElement("th");
+            th.innerText = h;
+            th.className = "th"+i;
+            i += 1;
+            tr.appendChild(th);
+        }
+        table.appendChild(tr);
     }
-    table.appendChild(tr);
 
     for (const c of contents) {
         tr = document.createElement("tr");
@@ -100,6 +102,26 @@ function html_table(table_classes, headings, contents) {
             const td = document.createElement("td");
             td.innerHTML = d;
             tr.appendChild(td);
+        }
+        table.appendChild(tr);
+    }
+    return table;
+}
+
+//mp html_vtable
+function html_vtable(table_classes, contents) {
+    const table = document.createElement("table");
+    table.className = "browser_table "+table_classes;
+    var tr;
+
+    for (const c of contents) {
+        tr = document.createElement("tr");
+        let td_or_th = "th";
+        for (const d of c) {
+            const td = document.createElement(td_or_th);
+            td.innerHTML = d;
+            tr.appendChild(td);
+            td_or_th = "td";
         }
         table.appendChild(tr);
     }
@@ -135,6 +157,17 @@ function find_data_type(data) {
     return;
 }
     
+
+//mp round_to_multiple
+function round_to_multiple(x, m, to=0 ) {
+    if (to==0) {
+        return m * Math.round(x/m);
+    } else if (to<0) {
+        return m * Math.floor(x/m);
+    } else {
+        return m * Math.ceil(x/m);
+    }
+}
 
 //a Log
 class Log {
@@ -176,7 +209,7 @@ class Log {
         if (!this.div) {
             return;
         }
-        var     html = "";
+        let html = "";
         for (const e of this.log) {
             html += `${e.severity} : ${e.src} : ${e.reason} : ${e.error} : <br/>`;
         }
@@ -497,6 +530,17 @@ class Ic {
         window.log.add_log(0, "project", "load", `Selected CIP ${this.cip_of_project} of ${this.project.name} img ${img}`);
     }
 
+    //mp save_cip
+    save_cip() {
+        const cip = this.project.cips[this.cip_of_project];
+        const cam_json = this.cam.to_json();
+        const pms_json = this.pms.to_json();
+        this.file_set.save_file("cam", cip[0], cam_json);
+        this.file_set.save_file("pms", cip[2], pms_json);
+
+        window.log.add_log(0, "project", "save", `Saved CIP ${this.cip_of_project} of ${this.project.name}`);
+    }
+
     //mp save_all
     save_all(root) {
         const nps_json = this.nps.to_json();
@@ -583,12 +627,17 @@ class Ic {
         }
     }
 
+    //mp redraw_rays
+    redraw_rays(ctx, scale, left, top) {
+    }
+
     //mp redraw_canvas
     redraw_canvas(canvas, scale, left, top) {
         const ctx = canvas.getContext("2d");
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         this.redraw_nps(ctx, scale, left, top);
         this.redraw_pms(ctx, scale, left, top);
+        this.redraw_rays(ctx, scale, left, top);
     }
 
     //zz All done
@@ -625,6 +674,8 @@ class ImageCanvas {
         this.image_div.style.height = height+"px";
 
         this.drag = null;
+        this.cursor = null;
+        this.animating = false;
 
         const me = this;
         this.canvas.addEventListener('wheel', function(e) {me.wheel(e);});
@@ -633,6 +684,7 @@ class ImageCanvas {
         this.canvas.addEventListener('mouseout', function(e) {me.mouse_up(e);});
         this.canvas.addEventListener('mousemove', function(e) {me.mouse_move(e);});
 
+        this.zoom = 1.0;
         this.redraw_canvas();
         this.image_div.width = width;
         this.image_div.height = height;
@@ -643,21 +695,199 @@ class ImageCanvas {
 
     //mp update_info
     update_info() {
-        console.log("Location", this.ic.cam.location());
-        console.log("Orientation", this.ic.cam.orientation());
+        // console.log("Location", this.ic.cam.location());
+        // console.log("Orientation", this.ic.cam.orientation());
     }
 
+    //mp redraw_grid
+    redraw_grid(canvas) {
+        if (this.scr_px_of_img_px < 0.0001) {
+            return;
+        }
+
+        let allowed_img_px = [[1,5], [5,2], [10,5], [50,2], [100,5], [500,2], [1000,5], [5000,2]];
+        // let allowed_img_px = [1,2,5,10,20,50,100,200,500,1000,2000,5000];
+        let img_px_grid = 1;
+        let img_px_thicker = 5;
+        for (const aip of allowed_img_px) {
+            let scr_px = aip[0] * this.scr_px_of_img_px;
+            if (scr_px > this.width/40) {
+                img_px_grid = aip[0];
+                img_px_thicker = aip[1];
+                break;
+            }
+        }
+
+        const img_cx = this.src_width/2;
+        const img_cy = this.src_height/2;
+        const img_lx = this.scr_lx / this.scr_px_of_img_px - img_cx;
+        const img_ty = this.scr_ty / this.scr_px_of_img_px - img_cy;
+        const img_rx = (this.scr_lx + this.width) / this.scr_px_of_img_px - img_cx;
+        const img_by = (this.scr_ty + this.height) / this.scr_px_of_img_px - img_cy;
+        const img_lx_grid = round_to_multiple(img_lx, img_px_grid, 1);
+        const img_ty_grid = round_to_multiple(img_ty, img_px_grid, 1);
+        const img_lx_grid_t_ofs = (img_lx_grid / img_px_grid) % img_px_thicker;
+        const img_ty_grid_t_ofs = (img_ty_grid / img_px_grid) % img_px_thicker;
+
+        const scr_lx_grid = (img_cx+img_lx_grid) * this.scr_px_of_img_px - this.scr_lx;
+        const scr_ty_grid = (img_cy+img_ty_grid) * this.scr_px_of_img_px - this.scr_ty;
+        const scr_cx = img_cx * this.scr_px_of_img_px - this.scr_lx;
+        const scr_cy = img_cy * this.scr_px_of_img_px - this.scr_ty;
+        const scr_px_grid = img_px_grid * this.scr_px_of_img_px;
+
+        const ctx = canvas.getContext("2d");
+
+        ctx.strokeStyle = "#666";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x=scr_lx_grid; x<this.width; x+=scr_px_grid) {
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, this.height);
+        }
+        for (let y=scr_ty_grid; y<this.height; y+=scr_px_grid) {
+            ctx.moveTo(0, y);
+            ctx.lineTo(this.width, y);
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = "#eee";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        let i = img_lx_grid_t_ofs;
+        for (let x=scr_lx_grid; x<this.width; x+=scr_px_grid) {
+            if (i==0) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, this.height);
+            }
+            i = (i+1)%img_px_thicker;
+        }
+        i = img_ty_grid_t_ofs;
+        for (let y=scr_ty_grid; y<this.height; y+=scr_px_grid) {
+            if (i==0) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(this.width, y);
+            }
+            i = (i+1)%img_px_thicker;
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(scr_cx, 0);
+        ctx.lineTo(scr_cx, this.height);
+        ctx.moveTo(0, scr_cy);
+        ctx.lineTo(this.width, scr_cy);
+        ctx.stroke();
+    }
+    
     //mp redraw_canvas
     redraw_canvas() {
-        const src_width = this.image.naturalWidth;
-        var scale = 0.0;
-        if (src_width > 0) {
-            scale = this.img_width/src_width;
+        this.src_width = this.image.naturalWidth;
+        this.src_height = this.image.naturalHeight;
+
+        this.max_zoom = 1.0;
+        this.min_zoom = 1.0;
+
+        if (this.src_width > 0) {
+            this.max_zoom = this.src_width*10/this.width;
+            this.min_zoom = 1.0;
         }
+        this.zoom_set(this.zoom);
+            
+        this.scr_lx = this.image_div.scrollLeft;
+        this.scr_ty = this.image_div.scrollTop;
         this.update_info();
-        this.ic.redraw_canvas(this.canvas, scale, this.image_div.scrollLeft, this.image_div.scrollTop);
+        this.just_redraw_canvas();
     }
 
+    //mp just_redraw_canvas
+    just_redraw_canvas() {
+        this.ic.redraw_canvas(this.canvas, this.scr_px_of_img_px, this.scr_lx, this.scr_ty);
+        this.redraw_grid(this.canvas);
+        this.redraw_cursor(this.canvas);
+    }
+
+
+    //mp redraw_cursor
+    redraw_cursor(canvas) {
+        if (this.cursor) {
+            const ctx = canvas.getContext("2d");
+            const cx = this.cursor[0]*this.scr_px_of_img_px - this.scr_lx;
+            const cy = this.cursor[1]*this.scr_px_of_img_px - this.scr_ty;
+            const r = this.cursor[2];
+            const angle = this.cursor[3];
+
+            const rs = r*Math.sin(angle);
+            const rc = r*Math.cos(angle);
+
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx-rs,cy-rc);
+            ctx.lineTo(cx+rs,cy+rc);
+            ctx.moveTo(cx-rc,cy+rs);
+            ctx.lineTo(cx+rc,cy-rs);
+            ctx.stroke();
+        }
+    }
+
+    //mp cursor_add
+    cursor_add(cx, cy, r) {
+        const cursor_info = document.getElementById("cursor_info");
+        if (cx) {
+            this.cursor = [cx, cy, r, 0, null];
+            this.set_animating(true);
+            if (cursor_info) {
+                html_clear(cursor_info);
+                cursor_info.innerText = `Cursor at ${html_position([cx,cy],0)}`;
+            }
+        } else {
+            this.cursor = null;
+            cursor_info.innerText = `No cursor`;
+        }
+    }
+
+    //mp animation_step
+    animation_step(ms) {
+        if (this.cursor) {
+            if (this.cursor[4] === null) {
+                this.cursor[4] = ms;
+            }
+            ms = (ms - this.cursor[4] + 100000) % 2500;
+            if (ms < 500) {
+                this.cursor[3] = ms*0.1;
+                this.just_redraw_canvas();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    //mp set_animating
+    set_animating(a) {
+        if (a) {
+            if (this.run_step_pending) {return;}
+            this.animating = true;
+            // Single threaded so these two lines are atomic
+            requestAnimationFrame((x)=>this.animation_callback(x));
+            this.run_step_pending = true;
+        } else {
+            this.animating = false;
+        }
+    }
+
+    //mp animation_callback
+    animation_callback(time_now) {
+        this.run_step_pending = false;
+        if (this.animating) {
+            var ms = Math.floor(time_now) % 100000;
+            if (this.animation_step(ms)) {
+                requestAnimationFrame((x)=>this.animation_callback(x));
+                this.run_step_pending = true;
+            }
+        }
+    }
 
     //mp refill_cip_list
     refill_cip_list() {
@@ -682,7 +912,6 @@ class ImageCanvas {
         this.ic.load_proj(proj);
         this.image.src = this.ic.img_src;
         this.refill_cip_list();
-        this.refill_nps();
         this.select_cip_of_project(0);
     }
 
@@ -699,11 +928,13 @@ class ImageCanvas {
     //mi mouse_down
     mouse_down(e) {
         this.drag = [e.layerX, e.layerY];
+        this.click = [e.layerX, e.layerY];
         e.preventDefault();
     }
 
     //mi mouse_move
     mouse_move(e) {
+        this.click = null;
         if (this.drag) {
             if (e.altKey) {
                 this.zoom_image_canvas((200+e.movementY)/200, this.drag[0], this.drag[1]);
@@ -717,36 +948,81 @@ class ImageCanvas {
     //mi mouse_up
     mouse_up(e) {
         this.drag = null;
+        if (this.click) {
+            const cx = (this.click[0]+this.scr_lx)/this.scr_px_of_img_px;
+            const cy = (this.click[1]+this.scr_ty)/this.scr_px_of_img_px;
+            this.cursor_add(cx, cy, 40);
+        }
         e.preventDefault();
+    }
+
+    //mi zoom_set
+    zoom_set(zoom, fxy) {
+        if (zoom > this.max_zoom) { zoom = this.max_zoom; }
+        if (zoom < this.min_zoom) { zoom = this.min_zoom; }
+
+        this.zoom = zoom;
+        const new_width = zoom * this.width;
+        const rescale_factor = new_width / this.img_width;
+
+        this.img_width = new_width;
+        this.image.width = new_width;
+
+        if (fxy) {
+            this.image_div.scrollLeft = this.image_div.scrollLeft*rescale_factor + (rescale_factor-1)*fxy[0];
+            this.image_div.scrollTop  = this.image_div.scrollTop*rescale_factor + (rescale_factor-1)*fxy[1];
+        } else {
+            this.image_div.scrollLeft = this.image_div.scrollLeft*rescale_factor + (rescale_factor-1)*this.width/2;
+            this.image_div.scrollTop  = this.image_div.scrollTop*rescale_factor + (rescale_factor-1)*this.height/2;
+        }
+       
+        this.scr_px_of_img_px = 1.0;
+        if (this.src_width > 0) {
+            this.scr_px_of_img_px = new_width/this.src_width;
+        }
+
+        const zoom_e = document.getElementById("zoom");
+        if (zoom_e) {
+            zoom_e.min = Math.log(this.min_zoom);
+            zoom_e.max = Math.log(this.max_zoom);
+            zoom_e.value = Math.log(this.zoom);
+        }
     }
 
     //mi zoom_image_canvas
     zoom_image_canvas(scale, fx, fy) {
-        const orig_width = this.img_width;
-        const ex = fx + this.image_div.scrollLeft;
-        const ey = fy + this.image_div.scrollTop;
-
-        var new_width = this.img_width * scale;
-        if (new_width > 24000) {
-            new_width = 24000;
-        }
-        if (new_width < 1200) {
-            new_width = 1200;
-        }
-        var actual_scale = new_width / orig_width;
-
-        this.img_width = new_width;
-        this.image_div.scrollLeft = ex * actual_scale - fx;
-        this.image_div.scrollTop = ey * actual_scale - fy;
-        
-        this.image.width = new_width;
+        this.zoom_set(scale * this.zoom, [fx, fy]);
         this.redraw_canvas();
+    }
+
+    //mi zoom_by
+    zoom_by(delta) {
+        const zoom_e = document.getElementById("zoom");
+        if (zoom_e) {
+            let zoom = Math.exp(zoom_e.value);
+            if (delta) {
+                zoom = this.zoom * delta;
+            }
+            this.zoom_set(zoom);
+            this.redraw_canvas();
+        }
     }
 
     //mi scroll_by
     scroll_by(dx, dy) {
         this.image_div.scrollLeft -= dx;
         this.image_div.scrollTop -= dy;
+        this.redraw_canvas();
+    }
+
+    //mi focus_on_src
+    focus_on_src(x, y) {
+        const scr_x = x * this.scr_px_of_img_px;
+        const scr_y = y * this.scr_px_of_img_px;
+        const scr_lx = scr_x - this.width/2;
+        const scr_ty = scr_y - this.height/2;
+        this.image_div.scrollLeft = scr_lx;
+        this.image_div.scrollTop = scr_ty;
         this.redraw_canvas();
     }
 
@@ -766,7 +1042,10 @@ class ImageCanvas {
     }
 
     //mp set_focus_distance
-    set_focus_distance(f) {
+    set_focus_distance(f, delta=null) {
+        if (f === null) {
+            f = this.ic.cam.focus_distance() + delta;
+        }
         this.ic.cam.set_focus_distance(f);
         console.log("Located with error", this.ic.cam.locate_using_model_lines(this.ic.pms));
         console.log("Oriented error", this.ic.cam.orient_using_rays_from_model(this.ic.pms));
@@ -774,19 +1053,42 @@ class ImageCanvas {
         this.redraw_canvas();
     }
 
-    //mp refill_nps
-    refill_nps() {
+    //mp refill_nps_pms
+    refill_nps_pms() {
         const nps = document.getElementById("nps_contents");
         if (nps) {
             html_clear(nps);
 
             const table_classes = "";
-            const headings = ["Name", "Color", "Location"];
+            const headings = ["Rays", "Name", "Color", "Location", "Expected at", "Focus", "Mapped to", "Focus", "Delete"];
             const contents = [];
+            const pms = this.ic.pms;
+            const cam = this.ic.cam;
 
-            for (const np_name of this.ic.nps.pts()) {
+            for (const np_name of this.ic.nps.pts().sort()) {
                 const np = this.ic.nps.get_pt(np_name);
-                contents.push([np.name(), np.color(), html_position(np.model())]);
+                const np_style = `style='color: ${np.color()};'}`;
+                const np_img = cam.map_model(np.model());
+                const np_x = np_img[0];
+                const np_y = np_img[1];
+                const rays = `<input type='radio' name='nps' id='np__${np_name}' oninput='window.image_canvas.rays_of_np("${np_name}")'/><label for='np__${np_name}'  ${np_style}>&#x263C;</label> `;
+                const expected_at = `${html_position([np_x-3360, np_y-2240],0)}`;
+                const focus_np = `<input type='button' value='&#x271A;' ${np_style} onclick='window.image_canvas.focus_on_src(${np_x},${np_y})'>`;
+                let mapped_to = `<input type='button' value="Set to cursor" onclick='window.image_canvas.set_pms_to_cursor("${np_name}")'>`;
+                let focus_pm = "";
+                let delete_pms = "";
+                const pms_n = pms.mapping_of_name(np_name);
+                if (pms_n !== undefined) {
+                    mapped_to = pms.get_xy_err(pms_n);
+                    let x = mapped_to[0];
+                    let y = mapped_to[1];
+                    let e = mapped_to[2];
+                    focus_pm = `<input type='button' value='&xcirc;' ${np_style} onclick='window.image_canvas.focus_on_src(${x},${y})'>`;
+                    mapped_to = `(${html_position([x-3360,y-2240])}  (err ${e})`;
+                    delete_pms =`<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.delete_pms("${np_name}")'>`;
+                        
+                }
+                contents.push([rays, np.name(), np.color(), html_position(np.model()), expected_at, focus_np, mapped_to, focus_pm, delete_pms]);
             }
             const table = html_table(table_classes, headings, contents);
             nps.append(table);
@@ -799,6 +1101,20 @@ class ImageCanvas {
         if (camera_info) {
             html_clear(camera_info);
 
+            const heading = html_add_ele(camera_info, "h2", "info_heading");
+            heading.innerText = "Camera Info";
+
+            const cip = this.ic.project.cips[this.ic.cip_of_project];
+            const n_cip = this.ic.project.cips.length;
+            const cip_num = `${this.ic.cip_of_project} of ${n_cip}`;
+            const itable = html_vtable("", 
+                                       [ ["CIP", cip_num],
+                                        ["Camera", cip[0]],
+                                        ["Image", cip[1]],
+                                        ["PMS", cip[2]],
+                                      ] );
+            camera_info.append(itable);
+
             const location = html_position(this.ic.cam.location());
 
             var orientation = this.ic.cam.orientation();
@@ -808,17 +1124,20 @@ class ImageCanvas {
                            -orientation[3].toFixed(2),
                           ];
             orientation = `${orientation[0]}, ${orientation[1]}, ${orientation[2]}, ${orientation[3]}`;
-            const direction = html_position(quaternion_x_Z(this.ic.cam.orientation()));
-            const up = html_position(quaternion_x_Y(this.ic.cam.orientation()));
+            const focus_distance = this.ic.cam.focus_distance();
+            const focused_on = html_position(quaternion_x_vector(this.ic.cam.orientation(), [0,0,-focus_distance], this.ic.cam.location()));
+            const direction = html_position(quaternion_x_vector(this.ic.cam.orientation(), [0,0,-focus_distance]));
+            const up = html_position(quaternion_x_vector(this.ic.cam.orientation(), [0,-10,0]));
             
             const table_classes = "";
             const headings = ["Parameter", "Value"];
             const contents = [
                 ["Body", this.ic.cam.body()],
                 ["Lens", this.ic.cam.lens()],
-                ["Focus at", `${this.ic.cam.focus_distance()} mm`],
+                ["Focus at", `${focus_distance} mm`],
                 ["Location", location],
                 ["Orientation", orientation],
+                ["Focused on", focused_on],
                 ["Direction", direction],
                 ["Up", up],
             ];
@@ -833,6 +1152,34 @@ class ImageCanvas {
         this.image.src = this.ic.img_src;
 
         this.refill_camera_info();
+        this.refill_nps_pms();
+        this.redraw_canvas();
+    }
+
+    //mp save_cip
+    save_cip() {
+        this.ic.save_cip();
+    }
+
+    //mp delete_pms
+    delete_pms(name) {
+        const pms_n = this.ic.pms.mapping_of_name(name);
+        if (pms_n) {
+            this.ic.pms.remove_mapping(pms_n);
+        }
+        this.refill_nps_pms();
+        this.redraw_canvas();
+    }
+
+    //mp set_pms_to_cursor
+    set_pms_to_cursor(name) {
+        const pms_n = this.ic.pms.mapping_of_name(name);
+        if (this.cursor) {
+            const cx = this.cursor[0];
+            const cy = this.cursor[1];
+            this.ic.pms.add_mapping(this.ic.nps, name, [cx, cy], 2);
+        }
+        this.refill_nps_pms();
         this.redraw_canvas();
     }
 

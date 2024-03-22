@@ -8,6 +8,7 @@
 
 .image_div {
     overflow: scroll;
+    image-rendering: pixelated;
 }
 .pos_abs {
     /* 
@@ -29,6 +30,13 @@
 #nps_contents {
     height: 100px;
     overflow: scroll;
+}
+
+.info_heading {
+    text-align: left;
+    font-weight: bold;
+    font-size: 20px;
+    color: blue;
 }
 
 #FileBrowser h1 {
