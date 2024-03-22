@@ -26,6 +26,11 @@
     vertical-align: top;
 }
 
+#nps_contents {
+    height: 100px;
+    overflow: scroll;
+}
+
 #FileBrowser h1 {
     text-align: left;
     font-weight: bold;

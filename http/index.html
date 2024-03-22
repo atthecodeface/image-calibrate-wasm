@@ -8,6 +8,8 @@
     <link href="main.css" rel="stylesheet" type="text/css">
     <p>
       <script type="module" src="./image_calibrate.js"></script>
+      <div height="100px" id="nps_contents">
+      </div>
       <table>
         <tr>
           <td>
@@ -17,17 +19,35 @@
           <td id="controls">
             <table>
               <tr>
-                <td>
+                <td colspan=3>
                   <label for="project_list">Choose a project:</label>
                   <select type="text" id="project_list" name="project_list"/>
                 </td>
               </tr>
               <tr>
-                <td>
+                <td colspan=3>
                   <input class="widget_button" type="button" value="Show NPS JSON" onclick="window.image_canvas.ic.json_to_element('json');"/>
                 </td>
-                <td>
+              </tr>
+              <tr>
+                <td colspan=3>
+                  <label for="cip_list">Choose a CIP:</label>
+                  <select type="text" id="cip_list" name="cip_list"/>
+                </td>
+              </tr>
+              <tr>
+                <td colspan=3>
+                  <input class="widget_button" type="button" value="Locate" onclick="window.image_canvas.locate();"/>
                   <input class="widget_button" type="button" value="Reorient" onclick="window.image_canvas.reorient();"/>
+                </td>
+              </tr>
+              <tr>
+                <td colspan=3>
+                  <label>Camera info</label>
+                </td>
+              </tr>
+              <tr>
+                <td colspan=3 id="camera_info">
                 </td>
               </tr>
             </table>

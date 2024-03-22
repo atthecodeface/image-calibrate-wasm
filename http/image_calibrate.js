@@ -28,6 +28,84 @@ function parse_json(data) {
     }
 }
 
+//mp quaternion_x_vector
+function quaternion_x_vector(q, v) {
+    const r = -q[3];
+    const i = q[0];
+    const j = q[1];
+    const k = q[2];
+    const x = (r * r + i * i - j * j - k * k) * v[0]
+        + 2 * (i * k + r * j) * v[2]
+        + 2 * (i * j - r * k) * v[1];
+    const y = (r * r - i * i + j * j - k * k) * v[1]
+        + 2 * (j * i + r * k) * v[0]
+        + 2 * (j * k - r * i) * v[2];
+    const z = (r * r - i * i - j * j + k * k) * v[2]
+        + 2 * (k * j + r * i) * v[1]
+        + 2 * (k * i - r * j) * v[0];
+    return [x, y, z];
+}
+
+//mp quaternion_x_X
+function quaternion_x_X(q, v) {
+    return quaternion_x_vector(q, [1,0,0]);
+}
+
+//mp quaternion_x_Y
+function quaternion_x_Y(q, v) {
+    return quaternion_x_vector(q, [0,1,0]);
+}
+
+//mp quaternion_x_Z
+function quaternion_x_Z(q, v) {
+    return quaternion_x_vector(q, [0,0,1]);
+}
+
+//mp html_position
+function html_position(c) {
+    c = [c[0].toFixed(2),
+         c[1].toFixed(2),
+         c[2].toFixed(2),
+        ];
+    return `${c[0]}, ${c[1]}, ${c[2]}`;
+}
+
+//mp html_clear
+function html_clear(id) {
+    while (id.firstChild) {
+        id.removeChild(id.firstChild);
+    }
+}
+
+//mp html_table
+function html_table(table_classes, headings, contents) {
+    const table = document.createElement("table");
+    table.className = "browser_table "+table_classes;
+    var tr;
+
+    tr = document.createElement("tr");
+    var i = 0;
+    for (const h of headings) {
+        const th = document.createElement("th");
+        th.innerText = h;
+        th.className = "th"+i;
+        i += 1;
+        tr.appendChild(th);
+    }
+    table.appendChild(tr);
+
+    for (const c of contents) {
+        tr = document.createElement("tr");
+        for (const d of c) {
+            const td = document.createElement("td");
+            td.innerHTML = d;
+            tr.appendChild(td);
+        }
+        table.appendChild(tr);
+    }
+    return table;
+}
+
 //mp find_data_type
 function find_data_type(data) {
     const obj = parse_json(data);
@@ -581,11 +659,31 @@ class ImageCanvas {
     }
 
 
+    //mp refill_cip_list
+    refill_cip_list() {
+        const cip_list = document.getElementById("cip_list");
+        if (cip_list) {
+            const me = cip_list;
+            cip_list.addEventListener('click', function(value) {window.image_canvas.select_cip_of_project(me.selectedOptions[0].value);} );
+            while (cip_list.firstChild) {
+                cip_list.removeChild(cip_list.firstChild);
+            }
+            for (const p in this.ic.project.cips) {
+                const opt = document.createElement("option");
+                opt.setAttribute("value", p);
+                opt.innerText = p;
+                cip_list.appendChild(opt);
+            }
+        }
+    }
+    
     //mp load_proj
     load_proj(proj) {
         this.ic.load_proj(proj);
         this.image.src = this.ic.img_src;
-        this.redraw_canvas();
+        this.refill_cip_list();
+        this.refill_nps();
+        this.select_cip_of_project(0);
     }
 
     //mi wheel
@@ -659,18 +757,82 @@ class ImageCanvas {
         this.redraw_canvas();
     }
 
+    //mp locate
+    locate(f) {
+        console.log("Located with error", this.ic.cam.locate_using_model_lines(this.ic.pms));
+        console.log("Oriented error", this.ic.cam.orient_using_rays_from_model(this.ic.pms));
+        this.refill_camera_info();
+        this.redraw_canvas();
+    }
+
     //mp set_focus_distance
     set_focus_distance(f) {
         this.ic.cam.set_focus_distance(f);
         console.log("Located with error", this.ic.cam.locate_using_model_lines(this.ic.pms));
         console.log("Oriented error", this.ic.cam.orient_using_rays_from_model(this.ic.pms));
+        this.refill_camera_info();
         this.redraw_canvas();
     }
+
+    //mp refill_nps
+    refill_nps() {
+        const nps = document.getElementById("nps_contents");
+        if (nps) {
+            html_clear(nps);
+
+            const table_classes = "";
+            const headings = ["Name", "Color", "Location"];
+            const contents = [];
+
+            for (const np_name of this.ic.nps.pts()) {
+                const np = this.ic.nps.get_pt(np_name);
+                contents.push([np.name(), np.color(), html_position(np.model())]);
+            }
+            const table = html_table(table_classes, headings, contents);
+            nps.append(table);
+        }
+    }    
+
+    //mp refill_camera_info
+    refill_camera_info() {
+        const camera_info = document.getElementById("camera_info");
+        if (camera_info) {
+            html_clear(camera_info);
+
+            const location = html_position(this.ic.cam.location());
+
+            var orientation = this.ic.cam.orientation();
+            orientation = [-orientation[0].toFixed(2),
+                           -orientation[1].toFixed(2),
+                           -orientation[2].toFixed(2),
+                           -orientation[3].toFixed(2),
+                          ];
+            orientation = `${orientation[0]}, ${orientation[1]}, ${orientation[2]}, ${orientation[3]}`;
+            const direction = html_position(quaternion_x_Z(this.ic.cam.orientation()));
+            const up = html_position(quaternion_x_Y(this.ic.cam.orientation()));
+            
+            const table_classes = "";
+            const headings = ["Parameter", "Value"];
+            const contents = [
+                ["Body", this.ic.cam.body()],
+                ["Lens", this.ic.cam.lens()],
+                ["Focus at", `${this.ic.cam.focus_distance()} mm`],
+                ["Location", location],
+                ["Orientation", orientation],
+                ["Direction", direction],
+                ["Up", up],
+            ];
+            const table = html_table(table_classes, headings, contents);
+            camera_info.append(table);
+        }
+    }    
 
     //mp select_cip_of_project
     select_cip_of_project(n) {
         this.ic.select_cip_of_project(n);
         this.image.src = this.ic.img_src;
+
+        this.refill_camera_info();
         this.redraw_canvas();
     }
 

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <title>Image calibration File Browser</title>
+  </head>
+  <body>
+    <link href="main.css" rel="stylesheet" type="text/css">
+    <script type="module" src="./image_calibrate.js"></script>
+    <table>
+      <tr>
+        <td>
+          <label for="upload">Upload (JSON)</label>
+          <input type="file" id="upload" name="upload" accept=".json" onchange="window.browser.upload_files(document.getElementById('upload').files);" multiple/>      
+        </td>
+      </tr>
+    </table>
+    <div id="FileBrowser"></div>
+    <div id='Log'></div>
+  </body>
+</html>

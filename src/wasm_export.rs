@@ -46,6 +46,16 @@ impl WasmCameraInstance {
         Ok(Self { camera })
     }
 
+    //mp body
+    pub fn body(&self) -> String {
+        self.camera.camera_name().into()
+    }
+
+    //mp lens
+    pub fn lens(&self) -> String {
+        self.camera.lens_name().into()
+    }
+
     //mp location
     pub fn location(&self) -> Result<Box<[f64]>, String> {
         let xyz: [f64; 3] = self.camera.location().into();
