@@ -5,6 +5,8 @@
 // img-to-scr-to-img class
 // error distance in named point
 // circular luminance/chrominance for 1mm, 3.161mm, 10mm or 1mm, 2.16mmm, 4.66mm, 10m...
+// Download project as a whole
+// save whole project
 
 //a Imports
 import init, {WasmCameraDatabase, WasmCameraInstance, WasmNamedPoint, WasmNamedPointSet, WasmPointMappingSet, WasmRay} from "../pkg/image_calibrate_wasm.js";
@@ -639,6 +641,117 @@ class Ic {
 
     //zz All done
 }
+
+//a ImageToScreen
+// This has an image that is WxH, and that is zoomed and panned to make
+// it visible on the screen
+//
+// The zoomed image has size Z.W x Z.H
+//
+// The screen has a size of w x h, which is a window onto the zoomed image
+// (so one zoom pixel is the same size as one screen pixel) at a
+// top-left offset of zoom_scr_ofs
+//
+// The zoom can scale from 1 (as the zoomed image is always at least
+// the same width as the screen) up to 10 screen/zoomed pixels per
+// image pixel (if max_zoom_px_per_img_px is 10)
+//
+//
+class ImageToScreen {
+
+    //fp constructor
+    constructor() {
+        this.min_zoom = 1.0;
+        this.max_zoom = 1.0;
+        this.zoom = 1.0;
+        this.img_wh = [0, 0];
+        this.scr_wh = [100, 100];
+        this.zoom_wh = [100, 100];
+        this.zoom_scr_ofs = [0,0];
+        this.max_zoom_px_per_img_px = 10;
+        this.zoom_px_of_img_px = 1.0;
+    }
+
+    //mp set_img
+    set_img(w, h) {
+        this.img_wh = [w,h];
+        this.recalculate_zoom();
+    }
+    //mp set_zoom_scr
+    set_zoom_scr(lx,ty) {
+        this.scr_lx = lx;
+        this.scr_ty = ty;
+    }
+
+    //mp recalculate_zoom
+    // Set the zoom to a specific factor
+    //
+    // Returns the scale factor from the current zoom to the actual new zoom
+    recalculate_zoom() {
+        this.min_zoom = 1.0;
+        this.max_zoom = 1.0;
+        if (this.img_wh[0] > 0) {
+            this.max_zoom = this.img_wh[0]*this.max_zoom_px_per_img_px / this.scr_wh[0];
+        }
+        this.zoom_set(this.zoom);
+    }
+            
+    //mp zoom_set
+    // Set the zoom to a specific factor
+    //
+    // Returns the scale factor from the current zoom to the actual new zoom
+    //
+    // If focus_xy is provided it is in *zoomed* coordinates; if not
+    // it is deemed to be the centre of the current window (i.e. scr_wh[]/2)
+    zoom_set(zoom, focus_xy) {
+        if (zoom > this.max_zoom) { zoom = this.max_zoom; }
+        if (zoom < this.min_zoom) { zoom = this.min_zoom; }
+
+        const rescale_factor = zoom / this.zoom;
+        this.zoom = zoom;
+        this.zoom_wh[0] = this.zoom * this.img_wh[0];
+        this.zoom_wh[1] = this.zoom * this.img_wh[1];
+        this.zoom_px_of_img_px = 1.0;
+        if (this.img_wh[0] > 0) {
+            this.zoom_px_of_img_px = this.zoom_wh[0] / this.img_wh[0];
+        }
+
+        if (!focus_xy) {
+            focus_xy = [this.scr_wh[0]/2, this.scr_wh[1]/2];
+        }
+        this.zoom_scr_ofs[0] = this.zoom_scr_ofs[0]*rescale_factor + (rescale_factor-1)*focus_xy[0];
+        this.zoom_scr_ofs[1] = this.zoom_scr_ofs[1]*rescale_factor + (rescale_factor-1)*focus_xy[1];
+        return rescale_factor;
+    }
+
+    //mp img_cxy
+    img_cxy() {
+        return [this.img_wh[0]/2, this.img_wh[1]/2];
+    }
+
+    //mp scr_xy_of_img_xy
+    // Get a screen XY of an image XY
+    //
+    // Map to the zoom space and account for the top-left of the screen window on the zoom area
+    scr_xy_of_img_xy(img_xy) {
+        return [img_xy[0] * this.zoom_px_of_img_px - this.zoom_scr_ofs[0],
+                img_xy[1] * this.zoom_px_of_img_px - this.zoom_scr_ofs[1]
+               ];
+    }
+
+    //mp img_bounds
+    img_bounds() {
+        const img_cxy = this.img_cxy();
+        const img_lx = this.zoom_scr_ofs[0] / this.zoom_px_of_img_px - img_cxy[0];
+        const img_ty = this.zoom_scr_ofs[1] / this.zoom_px_of_img_px - img_cxy[1];
+        const img_rx = (this.zoom_scr_ofs[0] + this.zoom_wh[0]) / this.zoom_px_of_img_px - img_cxy[0];
+        const img_by = (this.zoom_scr_ofs[1] + this.zoom_wh[1]) / this.zoom_px_of_img_px - img_cxy[1];
+        return [ img_lx, img_ty, img_rx, img_by];
+    }
+        
+    //zz All done
+}
+
 
 //a ImageCanvas
 class ImageCanvas {
