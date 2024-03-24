@@ -2,7 +2,6 @@
 // recolor named point (based on camera, need to get image pixel value - probably by creating a canvas?)
 // rename named point
 // project in Rust
-// img-to-scr-to-img class
 // error distance in named point
 // circular luminance/chrominance for 1mm, 3.161mm, 10mm or 1mm, 2.16mmm, 4.66mm, 10m...
 // Download project as a whole
@@ -546,7 +545,7 @@ class Ic {
     }
 
     //mp redraw_nps
-    redraw_nps(ctx, scale, left, top) {
+    redraw_nps(ctx, zw) {
         const nps = this.project.nps;
         if (!nps) {
             return;
@@ -556,20 +555,16 @@ class Ic {
 
         for (const name of nps.pts()) {
             const p = nps.get_pt(name);
-            let xyz = p.model();
-            let pxy = this.cam.map_model(xyz);
-            const x = pxy[0];
-            const y = pxy[1];
-            const sx = x*scale-left;
-            const sy = y*scale-top;
+            const xyz = p.model();
+            const pxy = zw.scr_xy_of_img_xy(this.cam.map_model(xyz));
             ctx.fillStyle = p.color();
-            ctx.fillRect(sx-cl, sy-cw, cl*2, cw*2);
-            ctx.fillRect(sx-cw, sy-cl, cw*2, cl*2);
+            ctx.fillRect(pxy[0]-cl, pxy[1]-cw, cl*2, cw*2);
+            ctx.fillRect(pxy[0]-cw, pxy[1]-cl, cw*2, cl*2);
         }
     }
     
     //mp redraw_pms
-    redraw_pms(ctx, scale, left, top) {
+    redraw_pms(ctx, zw) {
         if (!this.pms) {
             return;
         }
@@ -582,20 +577,16 @@ class Ic {
             const n = this.pms.get_name(i);
             const p = nps.get_pt(n);
             const xye = this.pms.get_xy_err(i);
-            // const m = p.model();
-            const x = xye[0];
-            const y = xye[1];
-            const sx = x*scale-left;
-            const sy = y*scale-top;
+            const sxy = zw.scr_xy_of_img_xy([xye[0], xye[1]]);
             ctx.strokeStyle = p.color();
             ctx.beginPath();
-            ctx.arc(sx, sy, cl, 0, Math.PI * 2, true);
+            ctx.arc(sxy[0], sxy[1], cl, 0, Math.PI * 2, true);
             ctx.stroke();
         }
     }
 
     //mp redraw_rays
-    redraw_rays(ctx, name, scale, left, top) {
+    redraw_rays(ctx, name, zw) {
         if (!this.project.nps || !name) {
             return;
         }
@@ -619,11 +610,11 @@ class Ic {
             const focus_distance = cip.cam.focus_distance();
             for (let k=0; k<100; k++) {
                 const xyz = ray.model_at_distance((k+50)*focus_distance/100);
-                let pxy = this.cam.map_model(xyz);
+                const pxy = zw.scr_xy_of_img_xy(this.cam.map_model(xyz));
                 if (k==0) {
-                    ctx.moveTo(pxy[0]*scale-left, pxy[1]*scale-top);
+                    ctx.moveTo(pxy[0], pxy[1]);
                 } else {
-                    ctx.lineTo(pxy[0]*scale-left, pxy[1]*scale-top);
+                    ctx.lineTo(pxy[0], pxy[1]);
                 }
             }
         }                    
@@ -631,24 +622,24 @@ class Ic {
     }
 
     //mp redraw_canvas
-    redraw_canvas(canvas, scale, left, top) {
+    redraw_canvas(canvas, zw) {
         const ctx = canvas.getContext("2d");
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        this.redraw_nps(ctx, scale, left, top);
-        this.redraw_pms(ctx, scale, left, top);
-        this.redraw_rays(ctx, this.trace_ray_name, scale, left, top);
+        this.redraw_nps(ctx, zw);
+        this.redraw_pms(ctx, zw);
+        this.redraw_rays(ctx, this.trace_ray_name, zw);
     }
 
     //zz All done
 }
 
-//a ImageToScreen
+//a ZoomedWindow
 // This has an image that is WxH, and that is zoomed and panned to make
 // it visible on the screen
 //
-// The zoomed image has size Z.W x Z.H
+// The zoomed image has size Z.w x Z.h
 //
-// The screen has a size of w x h, which is a window onto the zoomed image
+// The screen is a window into the zoomed image of size w x h
 // (so one zoom pixel is the same size as one screen pixel) at a
 // top-left offset of zoom_scr_ofs
 //
@@ -657,30 +648,45 @@ class Ic {
 // image pixel (if max_zoom_px_per_img_px is 10)
 //
 //
-class ImageToScreen {
+class ZoomedWindow {
 
     //fp constructor
-    constructor() {
+    constructor(scr_wh) {
         this.min_zoom = 1.0;
         this.max_zoom = 1.0;
         this.zoom = 1.0;
         this.img_wh = [0, 0];
-        this.scr_wh = [100, 100];
-        this.zoom_wh = [100, 100];
+        this.scr_wh = [scr_wh[0], scr_wh[1]];
+        this.zoom_wh = [scr_wh[0], scr_wh[1]];
         this.zoom_scr_ofs = [0,0];
         this.max_zoom_px_per_img_px = 10;
         this.zoom_px_of_img_px = 1.0;
     }
 
+    //ap get_zoom
+    get_zoom() {
+        return this.zoom;
+    }
+
+    //ap get_scr_wh
+    get_scr_wh() {
+        return this.scr_wh;
+    }
+
+    //ap get_img_cxy
+    get_img_cxy() {
+        return [this.img_wh[0]/2, this.img_wh[1]/2];
+    }
     //mp set_img
     set_img(w, h) {
         this.img_wh = [w,h];
         this.recalculate_zoom();
     }
+
     //mp set_zoom_scr
     set_zoom_scr(lx,ty) {
-        this.scr_lx = lx;
-        this.scr_ty = ty;
+        this.zoom_scr_ofs[0] = lx;
+        this.zoom_scr_ofs[1] = ty;
     }
 
     //mp recalculate_zoom
@@ -701,23 +707,26 @@ class ImageToScreen {
     //
     // Returns the scale factor from the current zoom to the actual new zoom
     //
-    // If focus_xy is provided it is in *zoomed* coordinates; if not
-    // it is deemed to be the centre of the current window (i.e. scr_wh[]/2)
+    // If focus_xy is provided it is in screen coordinates
+    // (i.e. zoomed pixels relative to the top-left); if not it is
+    // deemed to be the centre of the current window (i.e. scr_wh[]/2)
     zoom_set(zoom, focus_xy) {
         if (zoom > this.max_zoom) { zoom = this.max_zoom; }
         if (zoom < this.min_zoom) { zoom = this.min_zoom; }
 
         const rescale_factor = zoom / this.zoom;
         this.zoom = zoom;
-        this.zoom_wh[0] = this.zoom * this.img_wh[0];
-        this.zoom_wh[1] = this.zoom * this.img_wh[1];
+        this.zoom_wh[0] = this.zoom * this.scr_wh[0];
+        this.zoom_wh[1] = this.zoom * this.scr_wh[1];
         this.zoom_px_of_img_px = 1.0;
         if (this.img_wh[0] > 0) {
             this.zoom_px_of_img_px = this.zoom_wh[0] / this.img_wh[0];
         }
 
         if (!focus_xy) {
-            focus_xy = [this.scr_wh[0]/2, this.scr_wh[1]/2];
+            focus_xy = [ this.scr_wh[0]/2,
+                         this.scr_wh[1]/2
+                       ];
         }
         this.zoom_scr_ofs[0] = this.zoom_scr_ofs[0]*rescale_factor + (rescale_factor-1)*focus_xy[0];
         this.zoom_scr_ofs[1] = this.zoom_scr_ofs[1]*rescale_factor + (rescale_factor-1)*focus_xy[1];
@@ -739,6 +748,16 @@ class ImageToScreen {
                ];
     }
 
+    //mp img_xy_of_scr_xy
+    // Get an image XY of a screen XY
+    //
+    // Map from the zoom space and account for the top-left of the screen window on the zoom area
+    img_xy_of_scr_xy(scr_xy) {
+        return [(scr_xy[0] + this.zoom_scr_ofs[0]) / this.zoom_px_of_img_px,
+                (scr_xy[1] + this.zoom_scr_ofs[1]) / this.zoom_px_of_img_px
+               ];
+    }
+
     //mp img_bounds
     img_bounds() {
         const img_cxy = this.img_cxy();
@@ -748,7 +767,16 @@ class ImageToScreen {
         const img_by = (this.zoom_scr_ofs[1] + this.zoom_wh[1]) / this.zoom_px_of_img_px - img_cxy[1];
         return [ img_lx, img_ty, img_rx, img_by];
     }
-        
+
+    //mp scr_focus_on_img_xy For a given image XY, set the scr offset
+    // so that the image XY is in the center of the screen (if
+    // possible)
+    scr_focus_on_xy(img_xy) {
+        const scr_lx = img_xy[0] * this.zoom_px_of_img_px - this.scr_wh[0]/2;
+        const scr_ty = img_xy[1] * this.zoom_px_of_img_px - this.scr_wh[1]/2;
+        this.zoom_scr_ofs = [scr_lx, scr_ty];
+    }
+
     //zz All done
 }
 
@@ -773,13 +801,10 @@ class ImageCanvas {
         
         const width = this.div.offsetWidth;
         const height = this.div.offsetHeight;
-        this.width = width;
-        this.height = height;
 
-        this.img_width = width;
         this.canvas.width = width;
         this.canvas.height = height;
-        this.image.width = width;
+        this.image.width = width; // set the 'img' to be the zoomed size
         this.image_div.style.width = width+"px";
         this.image_div.style.height = height+"px";
 
@@ -787,6 +812,7 @@ class ImageCanvas {
         this.cursor = null;
         this.animating = false;
         this.min_grid_spacing = 30;
+        this.zw = new ZoomedWindow([width, height]);
 
         const me = this;
         this.canvas.addEventListener('wheel', function(e) {me.wheel(e);});
@@ -795,7 +821,6 @@ class ImageCanvas {
         this.canvas.addEventListener('mouseout', function(e) {me.mouse_up(e);});
         this.canvas.addEventListener('mousemove', function(e) {me.mouse_move(e);});
 
-        this.zoom = 1.0;
         this.redraw_canvas();
         this.image_div.width = width;
         this.image_div.height = height;
@@ -812,7 +837,7 @@ class ImageCanvas {
 
     //mp redraw_grid
     redraw_grid(canvas) {
-        if (this.scr_px_of_img_px < 0.0001) {
+        if (this.zw.zoom_px_of_img_px < 0.0001) {
             return;
         }
 
@@ -821,7 +846,7 @@ class ImageCanvas {
         let img_px_grid = 1;
         let img_px_thicker = 5;
         for (const aip of allowed_img_px) {
-            let scr_px = aip[0] * this.scr_px_of_img_px;
+            let scr_px = aip[0] * this.zw.zoom_px_of_img_px;
             if (scr_px > this.min_grid_spacing) {
                 img_px_grid = aip[0];
                 img_px_thicker = aip[1];
@@ -829,35 +854,31 @@ class ImageCanvas {
             }
         }
 
-        const img_cx = this.src_width/2;
-        const img_cy = this.src_height/2;
-        const img_lx = this.scr_lx / this.scr_px_of_img_px - img_cx;
-        const img_ty = this.scr_ty / this.scr_px_of_img_px - img_cy;
-        const img_rx = (this.scr_lx + this.width) / this.scr_px_of_img_px - img_cx;
-        const img_by = (this.scr_ty + this.height) / this.scr_px_of_img_px - img_cy;
-        const img_lx_grid = round_to_multiple(img_lx, img_px_grid, 1);
-        const img_ty_grid = round_to_multiple(img_ty, img_px_grid, 1);
+        const img_cxy = this.zw.get_img_cxy();
+        const img_bounds = this.zw.img_bounds();
+        const img_lx_grid = round_to_multiple(img_bounds[0], img_px_grid, 1);
+        const img_ty_grid = round_to_multiple(img_bounds[1], img_px_grid, 1);
         const img_lx_grid_t_ofs = (img_lx_grid / img_px_grid) % img_px_thicker;
         const img_ty_grid_t_ofs = (img_ty_grid / img_px_grid) % img_px_thicker;
 
-        const scr_lx_grid = (img_cx+img_lx_grid) * this.scr_px_of_img_px - this.scr_lx;
-        const scr_ty_grid = (img_cy+img_ty_grid) * this.scr_px_of_img_px - this.scr_ty;
-        const scr_cx = img_cx * this.scr_px_of_img_px - this.scr_lx;
-        const scr_cy = img_cy * this.scr_px_of_img_px - this.scr_ty;
-        const scr_px_grid = img_px_grid * this.scr_px_of_img_px;
+        const scr_grid_ltxy = this.zw.scr_xy_of_img_xy([ img_cxy[0]+img_lx_grid,
+                                                         img_cxy[1]+img_ty_grid ]);
+        const scr_cxy = this.zw.scr_xy_of_img_xy(img_cxy);
+        const scr_px_grid = img_px_grid * this.zw.zoom_px_of_img_px;
 
+        const scr_wh = this.zw.get_scr_wh();
         const ctx = canvas.getContext("2d");
 
         ctx.strokeStyle = "#666";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let x=scr_lx_grid; x<this.width; x+=scr_px_grid) {
+        for (let x=scr_grid_ltxy[0]; x<scr_wh[0]; x+=scr_px_grid) {
             ctx.moveTo(x, 0);
-            ctx.lineTo(x, this.height);
+            ctx.lineTo(x, scr_wh[1]);
         }
-        for (let y=scr_ty_grid; y<this.height; y+=scr_px_grid) {
+        for (let y=scr_grid_ltxy[1]; y<scr_wh[1]; y+=scr_px_grid) {
             ctx.moveTo(0, y);
-            ctx.lineTo(this.width, y);
+            ctx.lineTo(scr_wh[0], y);
         }
         ctx.stroke();
 
@@ -865,18 +886,18 @@ class ImageCanvas {
         ctx.lineWidth = 1;
         ctx.beginPath();
         let i = img_lx_grid_t_ofs;
-        for (let x=scr_lx_grid; x<this.width; x+=scr_px_grid) {
+        for (let x=scr_grid_ltxy[0]; x<scr_wh[0]; x+=scr_px_grid) {
             if (i==0) {
                 ctx.moveTo(x, 0);
-                ctx.lineTo(x, this.height);
+                ctx.lineTo(x, scr_wh[1]);
             }
             i = (i+1)%img_px_thicker;
         }
         i = img_ty_grid_t_ofs;
-        for (let y=scr_ty_grid; y<this.height; y+=scr_px_grid) {
+        for (let y=scr_grid_ltxy[1]; y<scr_wh[1]; y+=scr_px_grid) {
             if (i==0) {
                 ctx.moveTo(0, y);
-                ctx.lineTo(this.width, y);
+                ctx.lineTo(scr_wh[0], y);
             }
             i = (i+1)%img_px_thicker;
         }
@@ -885,10 +906,10 @@ class ImageCanvas {
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(scr_cx, 0);
-        ctx.lineTo(scr_cx, this.height);
-        ctx.moveTo(0, scr_cy);
-        ctx.lineTo(this.width, scr_cy);
+        ctx.moveTo(scr_cxy[0], 0);
+        ctx.lineTo(scr_cxy[0], scr_wh[1]);
+        ctx.moveTo(0, scr_cxy[1]);
+        ctx.lineTo(scr_wh[0], scr_cxy[1]);
         ctx.stroke();
     }
     
@@ -896,25 +917,16 @@ class ImageCanvas {
     redraw_canvas() {
         this.src_width = this.image.naturalWidth;
         this.src_height = this.image.naturalHeight;
-
-        this.max_zoom = 1.0;
-        this.min_zoom = 1.0;
-
-        if (this.src_width > 0) {
-            this.max_zoom = this.src_width*10/this.width;
-            this.min_zoom = 1.0;
-        }
-        this.zoom_set(this.zoom);
+        this.zw.set_img(this.src_width, this.src_height);
             
-        this.scr_lx = this.image_div.scrollLeft;
-        this.scr_ty = this.image_div.scrollTop;
+        this.zw.set_zoom_scr(this.image_div.scrollLeft, this.image_div.scrollTop);
         this.update_info();
         this.just_redraw_canvas();
     }
 
     //mp just_redraw_canvas
     just_redraw_canvas() {
-        this.ic.redraw_canvas(this.canvas, this.scr_px_of_img_px, this.scr_lx, this.scr_ty);
+        this.ic.redraw_canvas(this.canvas, this.zw);
         this.redraw_grid(this.canvas);
         this.redraw_cursor(this.canvas);
     }
@@ -924,8 +936,7 @@ class ImageCanvas {
     redraw_cursor(canvas) {
         if (this.cursor) {
             const ctx = canvas.getContext("2d");
-            const cx = this.cursor[0]*this.scr_px_of_img_px - this.scr_lx;
-            const cy = this.cursor[1]*this.scr_px_of_img_px - this.scr_ty;
+            const cxy = this.zw.scr_xy_of_img_xy([this.cursor[0], this.cursor[1]]);
             const r = this.cursor[2];
             const angle = this.cursor[3];
 
@@ -935,27 +946,27 @@ class ImageCanvas {
             ctx.strokeStyle = "#fff";
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(cx-rs,cy-rc);
-            ctx.lineTo(cx+rs,cy+rc);
-            ctx.moveTo(cx-rc,cy+rs);
-            ctx.lineTo(cx+rc,cy-rs);
+            ctx.moveTo(cxy[0]-rs,cxy[1]-rc);
+            ctx.lineTo(cxy[0]+rs,cxy[1]+rc);
+            ctx.moveTo(cxy[0]-rc,cxy[1]+rs);
+            ctx.lineTo(cxy[0]+rc,cxy[1]-rs);
             ctx.stroke();
         }
     }
 
     //mp cursor_add
-    cursor_add(cx, cy, r) {
+    cursor_add(cxy, r) {
         const cursor_info = document.getElementById("cursor_info");
-        if (cx) {
-            this.cursor = [cx, cy, r, 0, null];
+        if (cxy) {
+            this.cursor = [cxy[0], cxy[1], r, 0, null];
             this.set_animating(true);
             if (cursor_info) {
                 html_clear(cursor_info);
                 const input = html_add_ele(cursor_info, "input");
                 input.type = "button";
-                input.value = `Cursor at ${html_position([cx,cy],0)}`;
+                input.value = `Cursor at ${html_position(cxy,0)}`;
                 const me = this;
-                input.addEventListener('click', function(value) {me.focus_on_src(cx,cy);} );
+                input.addEventListener('click', function(value) {me.focus_on_src(cxy);} );
             }
         } else {
             this.cursor = null;
@@ -1064,49 +1075,34 @@ class ImageCanvas {
     mouse_up(e) {
         this.drag = null;
         if (this.click) {
-            const cx = (this.click[0]+this.scr_lx)/this.scr_px_of_img_px;
-            const cy = (this.click[1]+this.scr_ty)/this.scr_px_of_img_px;
-            this.cursor_add(cx, cy, 40);
+            const cxy = this.zw.img_xy_of_scr_xy(this.click);
+            this.cursor_add(cxy, 40);
         }
         e.preventDefault();
     }
 
     //mi zoom_set
     zoom_set(zoom, fxy) {
-        if (zoom > this.max_zoom) { zoom = this.max_zoom; }
-        if (zoom < this.min_zoom) { zoom = this.min_zoom; }
+        this.zw.set_zoom_scr(this.image_div.scrollLeft, this.image_div.scrollTop);
+        this.zw.zoom_set(zoom, fxy);
 
-        this.zoom = zoom;
-        const new_width = zoom * this.width;
-        const rescale_factor = new_width / this.img_width;
+        this.image.width = this.zw.zoom_wh[0]; // set the 'img' to be the zoomed size
 
-        this.img_width = new_width;
-        this.image.width = new_width;
-
-        if (fxy) {
-            this.image_div.scrollLeft = this.image_div.scrollLeft*rescale_factor + (rescale_factor-1)*fxy[0];
-            this.image_div.scrollTop  = this.image_div.scrollTop*rescale_factor + (rescale_factor-1)*fxy[1];
-        } else {
-            this.image_div.scrollLeft = this.image_div.scrollLeft*rescale_factor + (rescale_factor-1)*this.width/2;
-            this.image_div.scrollTop  = this.image_div.scrollTop*rescale_factor + (rescale_factor-1)*this.height/2;
-        }
+        const zoom_scr = this.zw.zoom_scr_ofs;
+        this.image_div.scrollLeft = zoom_scr[0];
+        this.image_div.scrollTop = zoom_scr[1];
        
-        this.scr_px_of_img_px = 1.0;
-        if (this.src_width > 0) {
-            this.scr_px_of_img_px = new_width/this.src_width;
-        }
-
         const zoom_e = document.getElementById("zoom");
         if (zoom_e) {
-            zoom_e.min = Math.log(this.min_zoom);
-            zoom_e.max = Math.log(this.max_zoom);
-            zoom_e.value = Math.log(this.zoom);
+            zoom_e.min = Math.log(this.zw.min_zoom);
+            zoom_e.max = Math.log(this.zw.max_zoom);
+            zoom_e.value = Math.log(this.zw.get_zoom());
         }
     }
 
     //mi zoom_image_canvas
     zoom_image_canvas(scale, fx, fy) {
-        this.zoom_set(scale * this.zoom, [fx, fy]);
+        this.zoom_set(scale * this.zw.get_zoom(), [fx, fy]);
         this.redraw_canvas();
     }
 
@@ -1116,7 +1112,7 @@ class ImageCanvas {
         if (zoom_e) {
             let zoom = Math.exp(zoom_e.value);
             if (delta) {
-                zoom = this.zoom * delta;
+                zoom = this.zw.get_zoom() * delta;
             }
             this.zoom_set(zoom);
             this.redraw_canvas();
@@ -1131,13 +1127,10 @@ class ImageCanvas {
     }
 
     //mi focus_on_src
-    focus_on_src(x, y) {
-        const scr_x = x * this.scr_px_of_img_px;
-        const scr_y = y * this.scr_px_of_img_px;
-        const scr_lx = scr_x - this.width/2;
-        const scr_ty = scr_y - this.height/2;
-        this.image_div.scrollLeft = scr_lx;
-        this.image_div.scrollTop = scr_ty;
+    focus_on_src(xy) {
+        this.zw.scr_focus_on_xy(xy);
+        this.image_div.scrollLeft = this.zw.zoom_scr_ofs[0];
+        this.image_div.scrollTop = this.zw.zoom_scr_ofs[1];
         this.redraw_canvas();
     }
 
@@ -1188,7 +1181,7 @@ class ImageCanvas {
                 const np_y = np_img[1];
                 const rays = `<input type='radio' name='nps' id='np__${np_name}' oninput='window.image_canvas.rays_of_nps("${np_name}")'/><label for='np__${np_name}'  ${np_style}>&#x263C;</label> `;
                 const expected_at = `${html_position([np_x-3360, np_y-2240],0)}`;
-                const focus_np = `<input type='button' value='&#x271A;' ${np_style} onclick='window.image_canvas.focus_on_src(${np_x},${np_y})'>`;
+                const focus_np = `<input type='button' value='&#x271A;' ${np_style} onclick='window.image_canvas.focus_on_src([${np_x},${np_y}])'>`;
                 let mapped_to = `<input type='button' value="Set to cursor" onclick='window.image_canvas.set_pms_to_cursor("${np_name}")'>`;
                 let focus_pm = "";
                 let delete_pms = "";
@@ -1198,7 +1191,7 @@ class ImageCanvas {
                     let x = mapped_to[0];
                     let y = mapped_to[1];
                     let e = mapped_to[2];
-                    focus_pm = `<input type='button' value='&xcirc;' ${np_style} onclick='window.image_canvas.focus_on_src(${x},${y})'>`;
+                    focus_pm = `<input type='button' value='&xcirc;' ${np_style} onclick='window.image_canvas.focus_on_src([${x},${y}])'>`;
                     mapped_to = `(${html_position([x-3360,y-2240])}  (err ${e})`;
                     delete_pms =`<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.delete_pms("${np_name}")'>`;
                         
