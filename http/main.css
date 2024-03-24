@@ -1,7 +1,7 @@
 .image_canvas {
     /* This sets the size of all the subelements due to the JS */
-    width: 1200px;
-    height: 600px;
+    width: 750px;
+    height: 500px;
     /* Make this a relative position to define a position context for 'absolute' to be meaningful relative to this block for 'can' items */
     position: relative;
 }
@@ -10,6 +10,12 @@
     overflow: scroll;
     image-rendering: pixelated;
 }
+
+.log {
+    overflow: scroll;
+    height: 100px;
+}
+
 .pos_abs {
     /* 
     Relative is relative to its desired location
@@ -28,7 +34,7 @@
 }
 
 #nps_contents {
-    height: 100px;
+    height: 200px;
     overflow: scroll;
 }
 

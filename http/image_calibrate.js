@@ -1,5 +1,13 @@
+//a To do
+// recolor named point (based on camera, need to get image pixel value - probably by creating a canvas?)
+// rename named point
+// project in Rust
+// img-to-scr-to-img class
+// error distance in named point
+// circular luminance/chrominance for 1mm, 3.161mm, 10mm or 1mm, 2.16mmm, 4.66mm, 10m...
+
 //a Imports
-import init, {WasmCameraDatabase, WasmCameraInstance, WasmNamedPoint, WasmNamedPointSet, WasmPointMappingSet} from "../pkg/image_calibrate_wasm.js";
+import init, {WasmCameraDatabase, WasmCameraInstance, WasmNamedPoint, WasmNamedPointSet, WasmPointMappingSet, WasmRay} from "../pkg/image_calibrate_wasm.js";
 //a Useful functions
 //fp is_array
 function is_array(obj) {
@@ -326,83 +334,84 @@ class FileSet {
     //zz All done
 }
 
-//a Constants
-const camera_db_json = `
-{
-    "bodies": [
-        {
-            "name": "Canon EOS 5D mark IV",
-            "aliases": ["5D"],
-            "px_centre":[3360.0,2240.0],
-            "px_width":6720.0,
-            "px_height":4480.0,
-            "flip_y":true,
-            "mm_sensor_width":36.0,
-            "mm_sensor_height":24.0
-        },
-        {
-            "name": "Logitech C270 640x480",
-            "aliases": ["C270"],
-            "px_centre":[320.0, 240.0],
-            "px_width":640.0,
-            "px_height":480.0,
-            "flip_y":true,
-            "mm_sensor_width":1.792,
-            "mm_sensor_height":1.344
-        }    ],
-    "lenses":[
-        {
-            "name":"EF50mm f1.8",
-            "aliases": ["50mm"],
-            "mm_focal_length":50.0,
-            "stw_poly":[0.0, 1.0],
-            "wts_poly":[0.0, 1.0]
-        },
-        {
-            "name": "Logitech C270",
-            "aliases": ["C270"],
-            "mm_focal_length":2.1515,
-            "stw_poly":[0.0, 1.0],
-            "wts_poly":[0.0, 1.0]
-        }       
-    ]
-}
-`;
-const camera_inst_json = `
-{
-    "body": "Canon EOS 5D mark IV",
-    "lens": "EF50mm f1.8",
-    "mm_focus_distance": 453.0,
-    "position": [ 0.0, 0.0, 0.0 ],
-    "direction": [ 0.0, 0.0, 0.0, 1.0 ]
-}
+//a CIP
+class CIP {
 
-`;
+    //fp constructor
+    constructor(cam_file, pms_file, img) {
+        this.cam_file = cam_file;
+        this.pms_file = pms_file;
+        this.img = img;
+        this.cam = null;
+        this.pms = null;
+    } 
+
+    //ap names
+    names() {
+        return [this.cam_file, this.img, this.pms_file];
+    }
+
+    //mp load_json
+    load_json(file_set, cdb, nps) {
+        const cam_json = file_set.load_file("cam", this.cam_file);
+        const pms_json = file_set.load_file("pms", this.pms_file);
+
+        this.cam = null;
+        this.pms = null;
+
+        if (!cam_json) {
+            window.log.add_log(5, "cip", "load", `Failed to read camera JSON file '${this.cam_file}'`);
+            return;
+        }
+        if (!pms_json) {
+            window.log.add_log(5, "cip", "load", `Failed to read PMS JSON file '${this.pms_file}`);
+            return;
+        }
+
+        this.cam = new WasmCameraInstance(cdb, cam_json);
+        this.pms = new WasmPointMappingSet();
+        this.pms.read_json(nps, pms_json);
+
+        window.log.add_log(0, "cip", "load", `Loaded CIP ${this.cam_file}:${this.pms_file}:${this.img}`);
+    }
+
+    //mp save_json
+    save_json(file_set) {
+        const cam_json = this.cam.to_json();
+        const pms_json = this.pms.to_json();
+        file_set.save_file("cam", this.cam_file, cam_json);
+        file_set.save_file("pms", this.pms_file, pms_json);
+
+        window.log.add_log(0, "cip", "save", `Saved CIP ${this.cam_file}:${this.pms_file}`);
+    }        
+}
 
 //a Project
 class Project {
 
     //fp constructor
-    constructor(fs, name) {
-        this.fs = fs;
+    constructor(file_set, name) {
+        this.file_set = file_set;
         this.name = name;
+        this.cdb_file = null;
+        this.nps_file = null;
+        this.cips = [];
         this.cdb = null;
         this.nps = null;
-        this.cips = [];
     }
 
     //mp is_valid
     is_valid() {
-        return (this.cdb && this.nps && (this.cips.length>0));
+        return (this.cdb_file && this.nps_file && (this.cips.length>0));
     }
 
     //mp as_json
     as_json() {
         const obj = {
             "name": this.name,
-            "nps": this.nps,
-            "cdb": this.cdb,
-            "cips": this.cips,
+            "nps": this.nps_file,
+            "cdb": this.cdb_file,
+            "cips": this.cips.names(),
         };
         return JSON.stringify(obj);
     }
@@ -415,39 +424,75 @@ class Project {
             return;
         }
         this.name = name;
+        this.nps_file = null;
+        this.cdb_file = null;
         this.nps = null;
         this.cdb = null;
         this.cips = [];
+
         if (is_string(obj.nps)) {
-            this.nps = obj.nps;
+            this.nps_file = obj.nps;
         }
         if (is_string(obj.cdb)) {
-            this.cdb = obj.cdb;
+            this.cdb_file = obj.cdb;
         }
         if (!is_array(obj.cips)) {
             return;
         }
         for (const cp of obj.cips) {
-            if (is_string(cp[0]) &&  is_string(cp[1]) && is_string(cp[2])) {
-                this.cips.push(cp);
+            if (is_string(cp[0]) && is_string(cp[1]) && is_string(cp[2])) {
+                this.cips.push(new CIP(cp[0], cp[2], cp[1]));
             }
         }
     }
 
-    //mp save
-    save() {
-        this.fs.save_file("proj",this.name,this.as_json());
+    //mp save_json
+    save_json() {
+        this.file_set.save_file("proj", this.name, this.as_json());
     }
 
-    //mp load
-    load() {
-        let json = this.fs.load_file("proj",this.name);
+    //mp load_json
+    load_json() {
+        let json = this.file_set.load_file("proj",this.name);
         if (json) {
             this.from_json(this.name, json);
         } else {
             window.log.add_log(5, "project", "load", `Failed to load json for project ${this.name}`);
         }
     }
+
+    //mp load_contents
+    load_contents() {
+        const cdb_json = this.file_set.load_file("cdb", this.cdb_file);
+        const nps_json = this.file_set.load_file("nps", this.nps_file);
+        if (!cdb_json) {
+            window.log.add_log(5, "project", "load", `Failed to read cdb ${this.cdb_file} for project ${name}`);
+            return;
+        }
+        if (!nps_json) {
+            window.log.add_log(5, "project", "load", `Failed to read nps ${this.nps_file} for project ${name}`);
+            return;
+        }
+
+        this.cdb = new WasmCameraDatabase(cdb_json);
+
+        this.nps = new WasmNamedPointSet();
+        this.nps.read_json(nps_json);
+
+        if (this.cdb && this.nps) {
+            for (const cip of this.cips) {
+                cip.load_json(this.file_set, this.cdb, this.nps);
+            }
+        }
+        window.log.add_log(0, "project", "load", `Read project contents ${this.name}`);
+    }        
+
+    //mp save_nps
+    save_nps() {
+        this.file_set.save_file("nps", this.nps_file, this.nps.to_json());
+    }
+
+    //zz All done
 }
 
 //a Ic
@@ -458,12 +503,7 @@ class Ic {
         this.file_set = file_set;
         this.project = new Project(this.file_set, "None");
         this.cip_of_project = 0;
-        this.cdb = new WasmCameraDatabase(camera_db_json);
-        this.nps = new WasmNamedPointSet();
-        this.cam = new WasmCameraInstance(this.cdb, camera_inst_json);
-        this.pms = new WasmPointMappingSet();
-        this.img_src = "";
-        this.other_cams = [];
+        this.trace_ray_name = null;
     }
 
     //mp load_proj
@@ -478,121 +518,42 @@ class Ic {
             window.log.add_log(5, "project", "load", `Failed to parse project data for ${name}`);
             return;
         }
-
-        const cdb_json = this.file_set.load_file("cdb", this.project.cdb);
-        const nps_json = this.file_set.load_file("nps", this.project.nps);
-        if (!cdb_json) {
-            window.log.add_log(5, "project", "load", `Failed to read cdb ${this.project.cdb} for project ${name}`);
-            return;
-        }
-        if (!nps_json) {
-            window.log.add_log(5, "project", "load", `Failed to read nps ${this.project.nps} for project ${name}`);
-            return;
-        }
-
-        this.cdb = new WasmCameraDatabase(cdb_json);
-
-        this.nps = new WasmNamedPointSet();
-        this.nps.read_json(nps_json);
-
+        this.project.load_contents();
         this.select_cip_of_project(0);
         window.log.add_log(0, "project", "load", `Read project ${name}`);
     }
 
     //mp select_cip_of_project
     select_cip_of_project(n) {
-
         this.cip_of_project = n;
         const cip = this.project.cips[this.cip_of_project];
-        const cam_json = this.file_set.load_file("cam", cip[0]);
-        const pms_json = this.file_set.load_file("pms", cip[2]);
-
-        if (!cam_json) {
-            window.log.add_log(5, "project", "cip", `Failed to read camera JSON file '${cip[0]}' ${this.project.cam} for project  ${this.project.name} CIP ${n}`);
-            return;
-        }
-        if (!pms_json) {
-            window.log.add_log(5, "project", "cip", `Failed to read PMS JSON file '${cip[2]}' ${this.project.pms} for project  ${this.project.name} CIP ${n}`);
-            return;
-        }
-
-        if (this.cdb) {
-            this.cam = new WasmCameraInstance(this.cdb, cam_json);
-        }
-
-        this.pms = new WasmPointMappingSet();
-        if (this.nps) {
-            this.pms.read_json(this.nps, pms_json);
-        }
-
-        const img = cip[1];
-        this.img_src = img;
-        window.log.add_log(0, "project", "load", `Selected CIP ${this.cip_of_project} of ${this.project.name} img ${img}`);
+        this.cam = cip.cam;
+        this.pms = cip.pms;
+        this.img_src = cip.img;
     }
 
     //mp save_cip
     save_cip() {
         const cip = this.project.cips[this.cip_of_project];
-        const cam_json = this.cam.to_json();
-        const pms_json = this.pms.to_json();
-        this.file_set.save_file("cam", cip[0], cam_json);
-        this.file_set.save_file("pms", cip[2], pms_json);
-
-        window.log.add_log(0, "project", "save", `Saved CIP ${this.cip_of_project} of ${this.project.name}`);
+        cip.save_json(this.file_set);
     }
 
-    //mp save_all
-    save_all(root) {
-        const nps_json = this.nps.to_json();
-        window.localStorage.setItem(`${root}.nps`, nps_json);
-        const data = window.localStorage.getItem(`{$root}.nps`);
-        if (typeof data !== "string") {
-            return;
-        }
-        this.dir(window.localStorage);
-    }
-
-    //mp json_to_element
-    json_to_element( id ) {
-        var ele = document.getElementById(id);
-        ele.innerText = this.nps.to_json();
-    }
-
-    //mp nps_set
-    nps_set(wnps) {
-        this.nps = wnps;
-        this.pms = new WasmPointMappingSet();
-        this.save_all("root");
-    }
-
-    //mp pms_set
-    pms_set(wpms) {
-        this.pms = wpms;
-    }
-
-    //mp camera_set
-    camera_set(camera) {
-        this.cam = camera;
-    }
-
-    //mp other_cameras_reset
-    other_cameras_reset() {
-        this.other_cams = [];
-    }
-
-    //mp other_cameras_add
-    other_cameras_add(camera) {
-        this.other_cams.push(camera);
+    //mp save_nps
+    save_nps() {
+        this.project.save_nps();
     }
 
     //mp redraw_nps
     redraw_nps(ctx, scale, left, top) {
+        const nps = this.project.nps;
+        if (!nps) {
+            return;
+        }
         const cl = 6;
         const cw = 2;
-        let names = this.nps.pts();
 
-        for (name of names) {
-            const p = this.nps.get_pt(name);
+        for (const name of nps.pts()) {
+            const p = nps.get_pt(name);
             let xyz = p.model();
             let pxy = this.cam.map_model(xyz);
             const x = pxy[0];
@@ -607,13 +568,17 @@ class Ic {
     
     //mp redraw_pms
     redraw_pms(ctx, scale, left, top) {
+        if (!this.pms) {
+            return;
+        }
         const cl = 6;
         const cw = 2;
-        let names = this.nps.pts();
+        const nps = this.project.nps;
+        
         let num_mappings = this.pms.len();
         for (let i = 0; i < num_mappings; i++) { 
             const n = this.pms.get_name(i);
-            const p = this.nps.get_pt(n);
+            const p = nps.get_pt(n);
             const xye = this.pms.get_xy_err(i);
             // const m = p.model();
             const x = xye[0];
@@ -628,7 +593,39 @@ class Ic {
     }
 
     //mp redraw_rays
-    redraw_rays(ctx, scale, left, top) {
+    redraw_rays(ctx, name, scale, left, top) {
+        if (!this.project.nps || !name) {
+            return;
+        }
+        const p = this.project.nps.get_pt(name);
+        if (!p) {
+            return;
+        }
+        ctx.strokeStyle = p.color();
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (const i in this.project.cips) {
+            if (i == this.cip_of_project) {
+                continue;
+            }
+            const cip = this.project.cips[i];
+            const mapping = cip.pms.mapping_of_name(name);
+            if (!mapping) {
+                continue;
+            }
+            const ray = cip.cam.get_pm_as_ray(cip.pms, mapping, true);
+            const focus_distance = cip.cam.focus_distance();
+            for (let k=0; k<100; k++) {
+                const xyz = ray.model_at_distance((k+50)*focus_distance/100);
+                let pxy = this.cam.map_model(xyz);
+                if (k==0) {
+                    ctx.moveTo(pxy[0]*scale-left, pxy[1]*scale-top);
+                } else {
+                    ctx.lineTo(pxy[0]*scale-left, pxy[1]*scale-top);
+                }
+            }
+        }                    
+        ctx.stroke();
     }
 
     //mp redraw_canvas
@@ -637,7 +634,7 @@ class Ic {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         this.redraw_nps(ctx, scale, left, top);
         this.redraw_pms(ctx, scale, left, top);
-        this.redraw_rays(ctx, scale, left, top);
+        this.redraw_rays(ctx, this.trace_ray_name, scale, left, top);
     }
 
     //zz All done
@@ -676,6 +673,7 @@ class ImageCanvas {
         this.drag = null;
         this.cursor = null;
         this.animating = false;
+        this.min_grid_spacing = 30;
 
         const me = this;
         this.canvas.addEventListener('wheel', function(e) {me.wheel(e);});
@@ -711,7 +709,7 @@ class ImageCanvas {
         let img_px_thicker = 5;
         for (const aip of allowed_img_px) {
             let scr_px = aip[0] * this.scr_px_of_img_px;
-            if (scr_px > this.width/40) {
+            if (scr_px > this.min_grid_spacing) {
                 img_px_grid = aip[0];
                 img_px_thicker = aip[1];
                 break;
@@ -840,7 +838,11 @@ class ImageCanvas {
             this.set_animating(true);
             if (cursor_info) {
                 html_clear(cursor_info);
-                cursor_info.innerText = `Cursor at ${html_position([cx,cy],0)}`;
+                const input = html_add_ele(cursor_info, "input");
+                input.type = "button";
+                input.value = `Cursor at ${html_position([cx,cy],0)}`;
+                const me = this;
+                input.addEventListener('click', function(value) {me.focus_on_src(cx,cy);} );
             }
         } else {
             this.cursor = null;
@@ -883,7 +885,7 @@ class ImageCanvas {
         if (this.animating) {
             var ms = Math.floor(time_now) % 100000;
             if (this.animation_step(ms)) {
-                requestAnimationFrame((x)=>this.animation_callback(x));
+                requestAnimationFrame((x) => this.animation_callback(x));
                 this.run_step_pending = true;
             }
         }
@@ -1065,13 +1067,13 @@ class ImageCanvas {
             const pms = this.ic.pms;
             const cam = this.ic.cam;
 
-            for (const np_name of this.ic.nps.pts().sort()) {
-                const np = this.ic.nps.get_pt(np_name);
+            for (const np_name of this.ic.project.nps.pts().sort()) {
+                const np = this.ic.project.nps.get_pt(np_name);
                 const np_style = `style='color: ${np.color()};'}`;
                 const np_img = cam.map_model(np.model());
                 const np_x = np_img[0];
                 const np_y = np_img[1];
-                const rays = `<input type='radio' name='nps' id='np__${np_name}' oninput='window.image_canvas.rays_of_np("${np_name}")'/><label for='np__${np_name}'  ${np_style}>&#x263C;</label> `;
+                const rays = `<input type='radio' name='nps' id='np__${np_name}' oninput='window.image_canvas.rays_of_nps("${np_name}")'/><label for='np__${np_name}'  ${np_style}>&#x263C;</label> `;
                 const expected_at = `${html_position([np_x-3360, np_y-2240],0)}`;
                 const focus_np = `<input type='button' value='&#x271A;' ${np_style} onclick='window.image_canvas.focus_on_src(${np_x},${np_y})'>`;
                 let mapped_to = `<input type='button' value="Set to cursor" onclick='window.image_canvas.set_pms_to_cursor("${np_name}")'>`;
@@ -1088,7 +1090,8 @@ class ImageCanvas {
                     delete_pms =`<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.delete_pms("${np_name}")'>`;
                         
                 }
-                contents.push([rays, np.name(), np.color(), html_position(np.model()), expected_at, focus_np, mapped_to, focus_pm, delete_pms]);
+                let location = `<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.derive_nps_location("${np_name}")'>&nbsp;${html_position(np.model())}`;
+                contents.push([rays, np.name(), np.color(), location, expected_at, focus_np, mapped_to, focus_pm, delete_pms]);
             }
             const table = html_table(table_classes, headings, contents);
             nps.append(table);
@@ -1101,17 +1104,14 @@ class ImageCanvas {
         if (camera_info) {
             html_clear(camera_info);
 
-            const heading = html_add_ele(camera_info, "h2", "info_heading");
-            heading.innerText = "Camera Info";
-
             const cip = this.ic.project.cips[this.ic.cip_of_project];
             const n_cip = this.ic.project.cips.length;
             const cip_num = `${this.ic.cip_of_project} of ${n_cip}`;
             const itable = html_vtable("", 
                                        [ ["CIP", cip_num],
-                                        ["Camera", cip[0]],
-                                        ["Image", cip[1]],
-                                        ["PMS", cip[2]],
+                                        ["Camera", cip.cam_file],
+                                        ["Image", cip.img],
+                                        ["PMS", cip.pms_file],
                                       ] );
             camera_info.append(itable);
 
@@ -1131,10 +1131,13 @@ class ImageCanvas {
             
             const table_classes = "";
             const headings = ["Parameter", "Value"];
+            let focus_at = `<input class="widget_button" type="button" value="-" onclick="window.image_canvas.set_focus_distance(null,-1);"/>`
+            focus_at += `&nbsp;${focus_distance} mm&nbsp;`;
+            focus_at += `<input class="widget_button" type="button" value="+" onclick="window.image_canvas.set_focus_distance(null,1);"/>`;
             const contents = [
                 ["Body", this.ic.cam.body()],
                 ["Lens", this.ic.cam.lens()],
-                ["Focus at", `${focus_distance} mm`],
+                ["Focus at", focus_at],
                 ["Location", location],
                 ["Orientation", orientation],
                 ["Focused on", focused_on],
@@ -1177,10 +1180,62 @@ class ImageCanvas {
         if (this.cursor) {
             const cx = this.cursor[0];
             const cy = this.cursor[1];
-            this.ic.pms.add_mapping(this.ic.nps, name, [cx, cy], 2);
+            this.ic.pms.add_mapping(this.ic.project.nps, name, [cx, cy], 2);
         }
         this.refill_nps_pms();
         this.redraw_canvas();
+    }
+
+    //mp add_np_at_cursor_fd
+    add_np_at_cursor_fd(name) {
+        if (!this.cursor) {
+            return;
+        }
+        if (!name) {
+            for (let uid = 10*1000; true; uid=uid+1) {
+                name = `${uid}`;
+                if (!this.ic.project.nps.get_pt(name)) {
+                    break;
+                }
+            }
+        }
+        const cx = this.cursor[0];
+        const cy = this.cursor[1];
+        const distance = this.ic.cam.focus_distance();
+        const xyz = this.ic.cam.model_at_distance([cx,cy], distance);
+        const color = "#0ff";
+        const wnp = new WasmNamedPoint(name, color);
+        this.ic.project.nps.add_pt(wnp);
+        this.ic.project.nps.set_model(name, xyz);
+        this.set_pms_to_cursor(name);
+        this.refill_nps_pms();
+        this.redraw_canvas();
+    }
+
+    //mp rays_of_nps
+    rays_of_nps(name) {
+        this.ic.trace_ray_name = name;
+        this.redraw_canvas();
+    }
+
+    //mp derive_nps_location
+    derive_nps_location(name) {
+        let rays = []
+        for (const cip of this.ic.project.cips) {
+            const mapping = cip.pms.mapping_of_name(name);
+            if (!mapping) {
+                continue;
+            }
+            rays.push(cip.cam.get_pm_as_ray(cip.pms, mapping, true));
+        }
+        if (rays.length > 1) {
+            const xyz = WasmRay.closest_model_to_intersection(rays);
+            if (xyz) {
+                this.ic.project.nps.set_model(name, xyz);
+                this.refill_nps_pms();
+                this.redraw_canvas();
+            }
+        }
     }
 
     //zz All done
@@ -1247,7 +1302,7 @@ class Browser {
         for (const f of window.file_set.dir().files_of_type("cam")) {
             let t = this.file_set.load_file("cam", f);
             const obj = parse_json(t);
-            const cam_html = obj.camera.body + "<br>" + obj.camera.lens + "<br>Focus distance " + obj.camera.mm_focus_distance + "mm";
+            const cam_html = obj.body + "<br>" + obj.lens + "<br>Focus distance " + obj.mm_focus_distance + "mm";
             const posn_html = obj.position[0].toFixed(2) + ", " + obj.position[1].toFixed(2) + ", " + obj.position[2].toFixed(2);
             cam_contents.push( [f, cam_html, posn_html] );
         }

@@ -8,14 +8,8 @@
     <link href="main.css" rel="stylesheet" type="text/css">
     <p>
       <script type="module" src="./image_calibrate.js"></script>
-      <div height="100px" id="nps_contents">
-      </div>
       <table>
         <tr>
-          <td>
-            <div id='image_canvas'  class='image_canvas'>
-            </div>
-          </td>
           <td id="controls">
             <table>
               <tr>
@@ -38,11 +32,6 @@
               </tr>
               <tr>
                 <td colspan=3>
-                  <input class="widget_button" type="button" value="Show NPS JSON" onclick="window.image_canvas.ic.json_to_element('json');"/>
-                </td>
-              </tr>
-              <tr>
-                <td colspan=3>
                   <label for="cip_list">Choose a CIP:</label>
                   <select type="text" id="cip_list" name="cip_list"/>
                 </td>
@@ -51,12 +40,8 @@
                 <td colspan=3>
                   <input class="widget_button" type="button" value="Locate" onclick="window.image_canvas.locate();"/>
                   <input class="widget_button" type="button" value="Reorient" onclick="window.image_canvas.reorient();"/>
-                </td>
-              </tr>
-              <tr>
-                <td colspan=3>
-                  <input class="widget_button" type="button" value="FD +" onclick="window.image_canvas.set_focus_distance(null,1);"/>
-                  <input class="widget_button" type="button" value="FD -" onclick="window.image_canvas.set_focus_distance(null,-1);"/>
+                  <input class="widget_button" type="button" value="Add NP" onclick="window.image_canvas.add_np_at_cursor_fd();"/>
+                  <input class="widget_button" type="button" value="Save NPS" onclick="window.image_canvas.ic.save_nps();"/>
                 </td>
               </tr>
               <tr>
@@ -70,10 +55,16 @@
               </tr>
             </table>
           </td>
+          <td>
+            <div id='image_canvas'  class='image_canvas'>
+            </div>
+          </td>
         </tr>
       </table>
       <textbox id='json'>
       </textbox>
-      <div id='Log'></div>
+      <div height="100px" id="nps_contents">
+      </div>
+      <div id='Log' class="log"></div>
   </body>
 </html>

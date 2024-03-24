@@ -3,9 +3,28 @@ use js_sys::Array;
 use wasm_bindgen::prelude::*;
 
 use image_calibrate::{
-    CameraAdjustMapping, CameraDatabase, CameraInstance, CameraProjection, CameraView, Color,
-    NamedPointSet, PointMappingSet,
+    CameraAdjustMapping, CameraDatabase, CameraInstance, CameraProjection, CameraPtMapping,
+    CameraView, Color, NamedPointSet, Point2D, Point3D, PointMappingSet, Ray,
 };
+
+//a Helpful functions
+//fi point3d
+fn point3d(pt: &[f64]) -> Result<Point3D, String> {
+    if pt.len() != 3 {
+        Err("Expected model point (x,y,z)".into())
+    } else {
+        Ok([pt[0], pt[1], pt[2]].into())
+    }
+}
+
+//fi point2d
+fn point2d(pt: &[f64]) -> Result<Point2D, String> {
+    if pt.len() != 2 {
+        Err("Expected point (x,y)".into())
+    } else {
+        Ok([pt[0], pt[1]].into())
+    }
+}
 
 //a WasmCameraDatabase
 //tp WasmCameraDatabase
@@ -24,6 +43,46 @@ impl WasmCameraDatabase {
         let json = image_calibrate::json::remove_comments(json);
         let cdb = CameraDatabase::from_json(&json).map_err(|e| e.to_string())?;
         Ok(Self { cdb })
+    }
+}
+
+//a WasmRay
+//tp WasmRay
+#[wasm_bindgen]
+pub struct WasmRay {
+    ray: Ray,
+}
+
+//ip WasmRay
+#[wasm_bindgen]
+impl WasmRay {
+    //fp new
+    /// Create a new WasmCameraInstance from a camera database and a Json file
+    #[wasm_bindgen(constructor)]
+    pub fn new(start: &[f64], dirn: &[f64], tan_error: Option<f64>) -> Result<WasmRay, String> {
+        let tan_error = tan_error.unwrap_or(0.01);
+        let ray = Ray::default()
+            .set_start(point3d(start)?)
+            .set_direction(point3d(dirn)?)
+            .set_tan_error(tan_error);
+        Ok(Self { ray })
+    }
+
+    //mp model_at_distance
+    pub fn model_at_distance(&self, distance: f64) -> Result<Box<[f64]>, String> {
+        let model: [f64; 3] = (self.ray.start + self.ray.direction * distance).into();
+        Ok(Box::new(model))
+    }
+
+    //mp closest_model_to_intersection
+    pub fn closest_model_to_intersection(rays: Vec<WasmRay>) -> Option<Box<[f64]>> {
+        let ray_list: Vec<Ray> = rays.into_iter().map(|r| r.ray).collect();
+        if let Some(model) = Ray::closest_point(&ray_list, &|_r| 1.0) {
+            let model: [f64; 3] = model.into();
+            Some(Box::new(model))
+        } else {
+            None
+        }
     }
 }
 
@@ -81,25 +140,45 @@ impl WasmCameraInstance {
 
     //mp map_model
     pub fn map_model(&self, pt: &[f64]) -> Result<Box<[f64]>, String> {
-        if pt.len() != 3 {
-            Err("Expected model point (x,y,z)".into())
-        } else {
-            let model = [pt[0], pt[1], pt[2]].into();
-            let pxy: [f64; 2] = self.camera.map_model(model).into();
-            Ok(Box::new(pxy))
-        }
+        let pxy: [f64; 2] = self.camera.map_model(point3d(pt)?).into();
+        Ok(Box::new(pxy))
     }
 
     //mp direction_of_pt
     pub fn direction_of_pt(&self, pt: &[f64]) -> Result<Box<[f64]>, String> {
-        if pt.len() != 2 {
-            Err("Expected frame point (x,y)".into())
+        let txty = self.camera.px_abs_xy_to_camera_txty(point2d(pt)?);
+        let model_dir: [f64; 3] = self.camera.camera_txty_to_world_dir(&txty).into();
+        Ok(Box::new(model_dir))
+    }
+
+    //mp get_pm_as_ray
+    pub fn get_pm_as_ray(
+        &self,
+        wpms: &WasmPointMappingSet,
+        n: usize,
+        from_camera: bool,
+    ) -> Result<WasmRay, String> {
+        if n < wpms.pms.mappings().len() {
+            let ray = self
+                .camera
+                .get_pm_as_ray(&wpms.pms.mappings()[n], from_camera);
+            Ok(WasmRay { ray })
+            /* WasmRay::new(
+                ray.start.as_ref(),
+                ray.direction.as_ref(),
+                Some(ray.tan_error),
+            )*/
         } else {
-            let pxy: [f64; 2] = [pt[0], pt[1]].into();
-            let txty = self.camera.px_abs_xy_to_camera_txty(pxy.into());
-            let model_dir: [f64; 3] = self.camera.camera_txty_to_world_dir(&txty).into();
-            Ok(Box::new(model_dir))
+            Err("PM index out of range".into())
         }
+    }
+
+    //mp model_at_distance
+    pub fn model_at_distance(&self, pt: &[f64], distance: f64) -> Result<Box<[f64]>, String> {
+        let txty = self.camera.px_abs_xy_to_camera_txty(point2d(pt)?);
+        let model = self.camera.location() - self.camera.camera_txty_to_world_dir(&txty) * distance;
+        let model: [f64; 3] = model.into();
+        Ok(Box::new(model))
     }
 
     //cp to_json
@@ -208,12 +287,9 @@ impl WasmPointMappingSet {
         screen: &[f64],
         error: f64,
     ) -> Result<bool, String> {
-        if screen.len() != 2 {
-            Err("Expected frame point (x,y)".into())
-        } else {
-            let pxy: [f64; 2] = [screen[0], screen[1]].into();
-            Ok(self.pms.add_mapping(&wnps.nps, name, &pxy.into(), error))
-        }
+        Ok(self
+            .pms
+            .add_mapping(&wnps.nps, name, &point2d(screen)?, error))
     }
 
     //mp remove_mapping
@@ -312,16 +388,16 @@ impl WasmNamedPointSet {
 
     //mp get_pt
     #[wasm_bindgen]
-    pub fn get_pt(&mut self, name: &str) -> Result<WasmNamedPoint, JsValue> {
+    pub fn get_pt(&mut self, name: &str) -> Option<WasmNamedPoint> {
         if let Some(np) = self.nps.get_pt(name) {
             let wnp = WasmNamedPoint {
                 name: name.into(),
                 color: np.color().as_string(),
                 model: np.model().into(),
             };
-            Ok(wnp)
+            Some(wnp)
         } else {
-            return Err("Unknown point")?;
+            None
         }
     }
 
@@ -334,6 +410,26 @@ impl WasmNamedPointSet {
             names.push(&name);
         }
         Ok(names)
+    }
+
+    //mp set_model
+    pub fn set_model(&self, name: &str, model: &[f64]) -> Result<(), String> {
+        if let Some(np) = self.nps.get_pt(name) {
+            np.set_model(Some(point3d(model)?));
+            Ok(())
+        } else {
+            Err("Could not find named point".into())
+        }
+    }
+
+    //mp unset_model
+    pub fn unset_model(&self, name: &str) -> Result<(), String> {
+        if let Some(np) = self.nps.get_pt(name) {
+            np.set_model(None);
+            Ok(())
+        } else {
+            Err("Could not find named point".into())
+        }
     }
 
     //zz All done
