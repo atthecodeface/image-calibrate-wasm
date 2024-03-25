@@ -534,8 +534,11 @@ class Ic {
     }
 
     //mp save_cip
-    save_cip() {
-        const cip = this.project.cips[this.cip_of_project];
+    save_cip(n) {
+        if (n === undefined) {
+            n = this.cip_of_project;
+        }
+        const cip = this.project.cips[n];
         cip.save_json(this.file_set);
     }
 
@@ -1142,7 +1145,7 @@ class ImageCanvas {
     }
 
     //mp locate
-    locate(f) {
+    locate() {
         console.log("Located with error", this.ic.cam.locate_using_model_lines(this.ic.pms));
         console.log("Oriented error", this.ic.cam.orient_using_rays_from_model(this.ic.pms));
         this.refill_camera_info();
@@ -1270,6 +1273,19 @@ class ImageCanvas {
         this.ic.save_cip();
     }
 
+    //mp save_nps
+    save_nps() {
+        this.ic.save_nps();
+    }
+
+    //mp save_all
+    save_all() {
+        this.ic.save_nps();
+        for (const i in this.ic.project.cips) {
+            this.ic.save_cip(i);
+        }
+    }
+
     //mp delete_pms
     delete_pms(name) {
         const pms_n = this.ic.pms.mapping_of_name(name);
@@ -1343,6 +1359,23 @@ class ImageCanvas {
             }
         }
     }
+
+    //mp derive_all_nps_location
+    derive_all_nps_location(name) {
+        for (const name in this.ic.project.nps.pts()) {
+            this.derive_nps_location(name);
+        }
+    }
+    //mp locate_all
+    locate_all() {
+        for (const cip of this.ic.project.cips) {
+            cip.cam.locate_using_model_lines(cip.pms);
+            cip.cam.reorient_using_rays_from_model(cip.pms);
+        }
+        this.refill_camera_info();
+        this.redraw_canvas();
+    }
+
 
     //zz All done
 }
