@@ -484,7 +484,7 @@ impl WasmNamedPointSet {
 //a WasmCip
 #[wasm_bindgen]
 pub struct WasmCip {
-    cip: Cip,
+    cip: Rrc<Cip>,
 }
 
 //ip WasmCip
@@ -494,27 +494,31 @@ impl WasmCip {
     /// Create a new WasmGraphCanvas attached to a Canvas HTML element,
     /// adding events to the canvas that provide the paint program
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmCip {
-        let cip = Cip::default();
+    pub fn new(cam_file: &str, image: &str, pms_file: &str) -> WasmCip {
+        let mut cip = Cip::default();
+        cip.set_camera_file(cam_file);
+        cip.set_image(image);
+        cip.set_pms_file(pms_file);
+        let cip = cip.into();
         Self { cip }
     }
 
     //ap camera
     #[wasm_bindgen(getter)]
     pub fn camera(&self) -> WasmCameraInstance {
-        WasmCameraInstance::of_camera(self.cip.camera().clone())
+        WasmCameraInstance::of_camera(self.cip.borrow().camera().clone())
     }
 
     //ap set_camera
     #[wasm_bindgen(setter)]
     pub fn set_camera(&mut self, wcamera: &WasmCameraInstance) {
-        self.cip.set_camera(wcamera.camera.clone());
+        self.cip.borrow_mut().set_camera(wcamera.camera.clone());
     }
 
     //ap pms
     #[wasm_bindgen(getter)]
     pub fn pms(&self) -> WasmPointMappingSet {
-        WasmPointMappingSet::of_pms(self.cip.pms().clone())
+        WasmPointMappingSet::of_pms(self.cip.borrow().pms().clone())
     }
 
     //zz All done
