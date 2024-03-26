@@ -99,7 +99,7 @@ impl WasmRay {
 //tp WasmCameraInstance
 #[wasm_bindgen]
 pub struct WasmCameraInstance {
-    camera: CameraInstance,
+    camera: Rrc<CameraInstance>,
 }
 
 //ip WasmCameraInstance
@@ -110,53 +110,60 @@ impl WasmCameraInstance {
     #[wasm_bindgen(constructor)]
     pub fn new(cdb: &WasmCameraDatabase, json: &str) -> Result<WasmCameraInstance, JsValue> {
         let json = image_calibrate::json::remove_comments(json);
-        let camera = CameraInstance::from_json(&cdb.cdb.borrow(), &json)?;
+        let camera = CameraInstance::from_json(&cdb.cdb.borrow(), &json)?.into();
         Ok(Self { camera })
     }
 
     //mp body
+    #[wasm_bindgen(getter)]
     pub fn body(&self) -> String {
-        self.camera.camera_name().into()
+        self.camera.borrow().camera_name().into()
     }
 
     //mp lens
+    #[wasm_bindgen(getter)]
     pub fn lens(&self) -> String {
-        self.camera.lens_name().into()
+        self.camera.borrow().lens_name().into()
     }
 
     //mp location
+    #[wasm_bindgen(getter)]
     pub fn location(&self) -> Result<Box<[f64]>, String> {
-        let xyz: [f64; 3] = self.camera.location().into();
+        let xyz: [f64; 3] = self.camera.borrow().location().into();
         Ok(Box::new(xyz))
     }
 
     //mp orientation
+    #[wasm_bindgen(getter)]
     pub fn orientation(&self) -> Box<[f64]> {
-        let q: [f64; 4] = self.camera.direction().into();
+        let q: [f64; 4] = self.camera.borrow().direction().into();
         Box::new(q)
     }
 
     //mp focus_distance
+    #[wasm_bindgen(getter)]
     pub fn focus_distance(&self) -> f64 {
-        self.camera.focus_distance()
+        self.camera.borrow().focus_distance()
     }
 
     //mp set_focus_distance
-    pub fn set_focus_distance(&mut self, mm_focus_distance: f64) -> f64 {
-        self.camera.set_focus_distance(mm_focus_distance);
-        self.camera.focus_distance()
+    #[wasm_bindgen(setter)]
+    pub fn set_focus_distance(&mut self, mm_focus_distance: f64) {
+        self.camera
+            .borrow_mut()
+            .set_focus_distance(mm_focus_distance);
     }
 
     //mp map_model
     pub fn map_model(&self, pt: &[f64]) -> Result<Box<[f64]>, String> {
-        let pxy: [f64; 2] = self.camera.map_model(point3d(pt)?).into();
+        let pxy: [f64; 2] = self.camera.borrow().map_model(point3d(pt)?).into();
         Ok(Box::new(pxy))
     }
 
     //mp direction_of_pt
     pub fn direction_of_pt(&self, pt: &[f64]) -> Result<Box<[f64]>, String> {
-        let txty = self.camera.px_abs_xy_to_camera_txty(point2d(pt)?);
-        let model_dir: [f64; 3] = self.camera.camera_txty_to_world_dir(&txty).into();
+        let txty = self.camera.borrow().px_abs_xy_to_camera_txty(point2d(pt)?);
+        let model_dir: [f64; 3] = self.camera.borrow().camera_txty_to_world_dir(&txty).into();
         Ok(Box::new(model_dir))
     }
 
@@ -170,6 +177,7 @@ impl WasmCameraInstance {
         if n < wpms.pms.borrow().mappings().len() {
             let ray = self
                 .camera
+                .borrow()
                 .get_pm_as_ray(&wpms.pms.borrow().mappings()[n], from_camera);
             Ok(WasmRay { ray })
             /* WasmRay::new(
@@ -184,8 +192,9 @@ impl WasmCameraInstance {
 
     //mp model_at_distance
     pub fn model_at_distance(&self, pt: &[f64], distance: f64) -> Result<Box<[f64]>, String> {
-        let txty = self.camera.px_abs_xy_to_camera_txty(point2d(pt)?);
-        let model = self.camera.location() - self.camera.camera_txty_to_world_dir(&txty) * distance;
+        let txty = self.camera.borrow().px_abs_xy_to_camera_txty(point2d(pt)?);
+        let model = self.camera.borrow().location()
+            - self.camera.borrow().camera_txty_to_world_dir(&txty) * distance;
         let model: [f64; 3] = model.into();
         Ok(Box::new(model))
     }
@@ -193,23 +202,27 @@ impl WasmCameraInstance {
     //cp to_json
     #[wasm_bindgen]
     pub fn to_json(&self) -> Result<String, JsValue> {
-        Ok(self.camera.to_json()?)
+        Ok(self.camera.borrow().to_json()?)
     }
 
     //mp locate_using_model_lines
     pub fn locate_using_model_lines(&mut self, wpms: &WasmPointMappingSet) -> f64 {
-        self.camera.locate_using_model_lines(&wpms.pms.borrow())
+        self.camera
+            .borrow_mut()
+            .locate_using_model_lines(&wpms.pms.borrow())
     }
 
     //mp orient_using_rays_from_model
     pub fn orient_using_rays_from_model(&mut self, wpms: &WasmPointMappingSet) -> f64 {
         self.camera
+            .borrow_mut()
             .orient_using_rays_from_model(wpms.pms.borrow().mappings())
     }
 
     //mp reorient_using_rays_from_model
     pub fn reorient_using_rays_from_model(&mut self, wpms: &WasmPointMappingSet) -> f64 {
         self.camera
+            .borrow_mut()
             .reorient_using_rays_from_model(wpms.pms.borrow().mappings())
     }
 

@@ -607,7 +607,7 @@ class Ic {
                 continue;
             }
             const ray = cip.cam.get_pm_as_ray(cip.pms, mapping, true);
-            const focus_distance = cip.cam.focus_distance();
+            const focus_distance = cip.cam.focus_distance;
             for (let k=0; k<100; k++) {
                 const xyz = ray.model_at_distance((k+50)*focus_distance/100);
                 const pxy = zw.scr_xy_of_img_xy(this.cam.map_model(xyz));
@@ -831,8 +831,8 @@ class ImageCanvas {
 
     //mp update_info
     update_info() {
-        // console.log("Location", this.ic.cam.location());
-        // console.log("Orientation", this.ic.cam.orientation());
+        // console.log("Location", this.ic.cam.location);
+        // console.log("Orientation", this.ic.cam.orientation);
     }
 
     //mp redraw_grid
@@ -1152,9 +1152,9 @@ class ImageCanvas {
     //mp set_focus_distance
     set_focus_distance(f, delta=null) {
         if (f === null) {
-            f = this.ic.cam.focus_distance() + delta;
+            f = this.ic.cam.focus_distance + delta;
         }
-        this.ic.cam.set_focus_distance(f);
+        this.ic.cam.focus_distance = f;
         console.log("Located with error", this.ic.cam.locate_using_model_lines(this.ic.pms));
         console.log("Oriented error", this.ic.cam.orient_using_rays_from_model(this.ic.pms));
         this.refill_camera_info();
@@ -1221,19 +1221,19 @@ class ImageCanvas {
                                       ] );
             camera_info.append(itable);
 
-            const location = html_position(this.ic.cam.location());
+            const location = html_position(this.ic.cam.location);
 
-            var orientation = this.ic.cam.orientation();
+            var orientation = this.ic.cam.orientation;
             orientation = [-orientation[0].toFixed(2),
                            -orientation[1].toFixed(2),
                            -orientation[2].toFixed(2),
                            -orientation[3].toFixed(2),
                           ];
             orientation = `${orientation[0]}, ${orientation[1]}, ${orientation[2]}, ${orientation[3]}`;
-            const focus_distance = this.ic.cam.focus_distance();
-            const focused_on = html_position(quaternion_x_vector(this.ic.cam.orientation(), [0,0,-focus_distance], this.ic.cam.location()));
-            const direction = html_position(quaternion_x_vector(this.ic.cam.orientation(), [0,0,-focus_distance]));
-            const up = html_position(quaternion_x_vector(this.ic.cam.orientation(), [0,-10,0]));
+            const focus_distance = this.ic.cam.focus_distance;
+            const focused_on = html_position(quaternion_x_vector(this.ic.cam.orientation, [0,0,-focus_distance], this.ic.cam.location));
+            const direction = html_position(quaternion_x_vector(this.ic.cam.orientation, [0,0,-focus_distance]));
+            const up = html_position(quaternion_x_vector(this.ic.cam.orientation, [0,-10,0]));
             
             const table_classes = "";
             const headings = ["Parameter", "Value"];
@@ -1241,8 +1241,8 @@ class ImageCanvas {
             focus_at += `&nbsp;${focus_distance} mm&nbsp;`;
             focus_at += `<input class="widget_button" type="button" value="+" onclick="window.image_canvas.set_focus_distance(null,1);"/>`;
             const contents = [
-                ["Body", this.ic.cam.body()],
-                ["Lens", this.ic.cam.lens()],
+                ["Body", this.ic.cam.body],
+                ["Lens", this.ic.cam.lens],
                 ["Focus at", focus_at],
                 ["Location", location],
                 ["Orientation", orientation],
@@ -1320,7 +1320,7 @@ class ImageCanvas {
         }
         const cx = this.cursor[0];
         const cy = this.cursor[1];
-        const distance = this.ic.cam.focus_distance();
+        const distance = this.ic.cam.focus_distance;
         const xyz = this.ic.cam.model_at_distance([cx,cy], distance);
         const color = "#0ff";
         const wnp = new WasmNamedPoint(name, color);
