@@ -352,34 +352,10 @@ class CIP {
     }
 
     //mp load_json
-    load_json(file_set, project) {
-        const cam_json = file_set.load_file("cam", this.cam_file);
-        const pms_json = file_set.load_file("pms", this.pms_file);
+    load_json(project, cam_json, pms_json) {
 
-        if (!cam_json) {
-            window.log.add_log(5, "cip", "load", `Failed to read camera JSON file '${this.cam_file}'`);
-            return;
-        }
-        if (!pms_json) {
-            window.log.add_log(5, "cip", "load", `Failed to read PMS JSON file '${this.pms_file}`);
-            return;
-        }
-
-        this.cip.camera = new WasmCameraInstance(project.cdb, cam_json);
-        this.cip.pms.read_json(project.nps, pms_json);
-
-        window.log.add_log(0, "cip", "load", `Loaded CIP ${this.cam_file}:${this.pms_file}:${this.img}`);
     }
 
-    //mp save_json
-    save_json(file_set) {
-        const cam_json = this.cip.camera.to_json();
-        const pms_json = this.cip.pms.to_json();
-        file_set.save_file("cam", this.cam_file, cam_json);
-        file_set.save_file("pms", this.pms_file, pms_json);
-
-        window.log.add_log(0, "cip", "save", `Saved CIP ${this.cam_file}:${this.pms_file}`);
-    }        
 }
 
 //a Project
@@ -406,7 +382,7 @@ class Project {
             "name": this.name,
             "nps": this.nps_file,
             "cdb": this.cdb_file,
-            "cips": this.cips.names(),
+            "cips": this.banana.cips.names(),
         };
         return JSON.stringify(obj);
     }
@@ -474,7 +450,23 @@ class Project {
 
         if (this.project.cdb && this.project.nps) {
             for (const cip of this.cips) {
-                cip.load_json(this.file_set, this.project);
+
+                const cam_json = this.file_set.load_file("cam", cip.cam_file);
+                const pms_json = this.file_set.load_file("pms", cip.pms_file);
+
+                if (!cam_json) {
+                    window.log.add_log(5, "cip", "load", `Failed to read camera JSON file '${cip.cam_file}'`);
+                    continue;
+                }
+                if (!pms_json) {
+                    window.log.add_log(5, "cip", "load", `Failed to read PMS JSON file '${cip.pms_file}`);
+                    continue;
+                }
+
+                cip.cip.camera = new WasmCameraInstance(this.project.cdb, cam_json);
+                cip.cip.pms.read_json(this.project.nps, pms_json);
+                
+                window.log.add_log(0, "cip", "load", `Loaded CIP ${cip.cam_file}:${cip.pms_file}:${cip.img}`);
             }
         }
         window.log.add_log(0, "project", "load", `Read project contents ${this.name}`);
@@ -531,7 +523,13 @@ class Ic {
             n = this.cip_of_project;
         }
         const cip = this.project.cips[n];
-        cip.save_json(this.file_set);
+
+        const cam_json = cip.cip.camera.to_json();
+        const pms_json = cip.cip.pms.to_json();
+        this.file_set.save_file("cam", cip.cam_file, cam_json);
+        this.file_set.save_file("pms", cip.pms_file, pms_json);
+
+        window.log.add_log(0, "cip", "save", `Saved CIP ${cip.cam_file}:${cip.pms_file}`);
     }
 
     //mp save_nps
