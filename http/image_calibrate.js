@@ -8,7 +8,7 @@
 // save whole project
 
 //a Imports
-import init, {WasmProject, WasmCameraDatabase, WasmCameraInstance, WasmNamedPoint, WasmNamedPointSet, WasmPointMappingSet, WasmRay} from "../pkg/image_calibrate_wasm.js";
+import init, {WasmProject, WasmCip, WasmCameraDatabase, WasmCameraInstance, WasmNamedPoint, WasmNamedPointSet, WasmPointMappingSet, WasmRay} from "../pkg/image_calibrate_wasm.js";
 //a Useful functions
 //fp is_array
 function is_array(obj) {
@@ -343,8 +343,8 @@ class CIP {
         this.cam_file = cam_file;
         this.pms_file = pms_file;
         this.img = img;
-        this.cam = null;
         this.pms = null;
+        this.cip = new WasmCip();
     } 
 
     //ap names
@@ -357,7 +357,6 @@ class CIP {
         const cam_json = file_set.load_file("cam", this.cam_file);
         const pms_json = file_set.load_file("pms", this.pms_file);
 
-        this.cam = null;
         this.pms = null;
 
         if (!cam_json) {
@@ -369,7 +368,7 @@ class CIP {
             return;
         }
 
-        this.cam = new WasmCameraInstance(project.cdb, cam_json);
+        this.cip.camera = new WasmCameraInstance(project.cdb, cam_json);
         this.pms = new WasmPointMappingSet();
         this.pms.read_json(project.nps, pms_json);
 
@@ -378,7 +377,7 @@ class CIP {
 
     //mp save_json
     save_json(file_set) {
-        const cam_json = this.cam.to_json();
+        const cam_json = this.cip.camera.to_json();
         const pms_json = this.pms.to_json();
         file_set.save_file("cam", this.cam_file, cam_json);
         file_set.save_file("pms", this.pms_file, pms_json);
@@ -525,7 +524,7 @@ class Ic {
     select_cip_of_project(n) {
         this.cip_of_project = n;
         const cip = this.project.cips[this.cip_of_project];
-        this.cam = cip.cam;
+        this.cam = cip.cip.camera;
         this.pms = cip.pms;
         this.img_src = cip.img;
     }
@@ -606,8 +605,8 @@ class Ic {
             if (!mapping) {
                 continue;
             }
-            const ray = cip.cam.get_pm_as_ray(cip.pms, mapping, true);
-            const focus_distance = cip.cam.focus_distance;
+            const ray = cip.cip.camera.get_pm_as_ray(cip.pms, mapping, true);
+            const focus_distance = cip.cip.camera.focus_distance;
             for (let k=0; k<100; k++) {
                 const xyz = ray.model_at_distance((k+50)*focus_distance/100);
                 const pxy = zw.scr_xy_of_img_xy(this.cam.map_model(xyz));
@@ -1345,7 +1344,7 @@ class ImageCanvas {
             if (!mapping) {
                 continue;
             }
-            rays.push(cip.cam.get_pm_as_ray(cip.pms, mapping, true));
+            rays.push(cip.cip.camera.get_pm_as_ray(cip.pms, mapping, true));
         }
         if (rays.length > 1) {
             const xyz = WasmRay.closest_model_to_intersection(rays);
@@ -1366,8 +1365,8 @@ class ImageCanvas {
     //mp locate_all
     locate_all() {
         for (const cip of this.ic.project.cips) {
-            cip.cam.locate_using_model_lines(cip.pms);
-            cip.cam.reorient_using_rays_from_model(cip.pms);
+            cip.cip.camera.locate_using_model_lines(cip.pms);
+            cip.cip.camera.reorient_using_rays_from_model(cip.pms);
         }
         this.refill_camera_info();
         this.redraw_canvas();

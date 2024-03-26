@@ -6,7 +6,7 @@ use wasm_bindgen::prelude::*;
 
 use image_calibrate::{
     CameraAdjustMapping, CameraDatabase, CameraInstance, CameraProjection, CameraPtMapping,
-    CameraView, Color, NamedPointSet, Point2D, Point3D, PointMappingSet, Project, Ray, Rrc,
+    CameraView, Cip, Color, NamedPointSet, Point2D, Point3D, PointMappingSet, Project, Ray, Rrc,
 };
 
 //a Helpful functions
@@ -112,6 +112,11 @@ impl WasmCameraInstance {
         let json = image_calibrate::json::remove_comments(json);
         let camera = CameraInstance::from_json(&cdb.cdb.borrow(), &json)?.into();
         Ok(Self { camera })
+    }
+
+    //cp of_camera
+    fn of_camera(camera: Rrc<CameraInstance>) -> Self {
+        Self { camera }
     }
 
     //mp body
@@ -244,6 +249,11 @@ impl WasmPointMappingSet {
     #[wasm_bindgen(constructor)]
     pub fn new() -> WasmPointMappingSet {
         let pms = PointMappingSet::default().into();
+        Self { pms }
+    }
+
+    //cp of_pms
+    fn of_pms(pms: Rrc<PointMappingSet>) -> Self {
         Self { pms }
     }
 
@@ -466,6 +476,45 @@ impl WasmNamedPointSet {
         } else {
             Err("Could not find named point".into())
         }
+    }
+
+    //zz All done
+}
+
+//a WasmCip
+#[wasm_bindgen]
+pub struct WasmCip {
+    cip: Cip,
+}
+
+//ip WasmCip
+#[wasm_bindgen]
+impl WasmCip {
+    //cp new
+    /// Create a new WasmGraphCanvas attached to a Canvas HTML element,
+    /// adding events to the canvas that provide the paint program
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WasmCip {
+        let cip = Cip::default();
+        Self { cip }
+    }
+
+    //ap camera
+    #[wasm_bindgen(getter)]
+    pub fn camera(&self) -> WasmCameraInstance {
+        WasmCameraInstance::of_camera(self.cip.camera().clone())
+    }
+
+    //ap set_camera
+    #[wasm_bindgen(setter)]
+    pub fn set_camera(&mut self, wcamera: &WasmCameraInstance) {
+        self.cip.set_camera(wcamera.camera.clone());
+    }
+
+    //ap pms
+    #[wasm_bindgen(getter)]
+    pub fn pms(&self) -> WasmPointMappingSet {
+        WasmPointMappingSet::of_pms(self.cip.pms().clone())
     }
 
     //zz All done
