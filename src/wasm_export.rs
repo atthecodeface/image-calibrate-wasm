@@ -1,10 +1,12 @@
 //a Imports
+use std::default::Default;
+
 use js_sys::Array;
 use wasm_bindgen::prelude::*;
 
 use image_calibrate::{
     CameraAdjustMapping, CameraDatabase, CameraInstance, CameraProjection, CameraPtMapping,
-    CameraView, Color, NamedPointSet, Point2D, Point3D, PointMappingSet, Ray,
+    CameraView, Color, NamedPointSet, Point2D, Point3D, PointMappingSet, Project, Ray, Rrc,
 };
 
 //a Helpful functions
@@ -229,7 +231,7 @@ impl WasmPointMappingSet {
     /// Read a json file to add to the points
     pub fn read_json(&mut self, wnps: &WasmNamedPointSet, json: &str) -> Result<(), JsValue> {
         let json = image_calibrate::json::remove_comments(json);
-        let nf = self.pms.read_json(&wnps.nps, &json, true)?;
+        let nf = self.pms.read_json(&wnps.nps.borrow(), &json, true)?;
         // if !nf.is_empty() {
         // eprintln!("Warning: {}", nf);
         // }
@@ -289,7 +291,7 @@ impl WasmPointMappingSet {
     ) -> Result<bool, String> {
         Ok(self
             .pms
-            .add_mapping(&wnps.nps, name, &point2d(screen)?, error))
+            .add_mapping(&wnps.nps.borrow(), name, &point2d(screen)?, error))
     }
 
     //mp remove_mapping
@@ -348,7 +350,7 @@ impl WasmNamedPoint {
 /// A set of named points
 #[wasm_bindgen]
 pub struct WasmNamedPointSet {
-    nps: NamedPointSet,
+    nps: Rrc<NamedPointSet>,
 }
 
 //ip WasmNamedPointSet
@@ -359,8 +361,13 @@ impl WasmNamedPointSet {
     /// adding events to the canvas that provide the paint program
     #[wasm_bindgen(constructor)]
     pub fn new() -> Result<WasmNamedPointSet, JsValue> {
-        let nps = NamedPointSet::default();
+        let nps = Rrc::<NamedPointSet>::default();
         Ok(Self { nps })
+    }
+
+    //cp of_nps
+    fn of_nps(nps: Rrc<NamedPointSet>) -> Self {
+        Self { nps }
     }
 
     //cp read_json
@@ -368,28 +375,30 @@ impl WasmNamedPointSet {
     pub fn read_json(&mut self, json: &str) -> Result<(), JsValue> {
         let json = image_calibrate::json::remove_comments(json);
         let nps = NamedPointSet::from_json(&json)?;
-        self.nps.merge(&nps);
+        self.nps.borrow_mut().merge(&nps);
         Ok(())
     }
 
     //cp to_json
     #[wasm_bindgen]
     pub fn to_json(&self) -> Result<String, JsValue> {
-        Ok(self.nps.to_json()?)
+        Ok(self.nps.borrow().to_json()?)
     }
 
     //mp add_pt
     #[wasm_bindgen]
     pub fn add_pt(&mut self, wnp: WasmNamedPoint) -> Result<(), JsValue> {
         let color: Color = wnp.color.as_str().try_into()?;
-        self.nps.add_pt(&wnp.name, color, Some(wnp.model.into()));
+        self.nps
+            .borrow_mut()
+            .add_pt(&wnp.name, color, Some(wnp.model.into()));
         Ok(())
     }
 
     //mp get_pt
     #[wasm_bindgen]
     pub fn get_pt(&mut self, name: &str) -> Option<WasmNamedPoint> {
-        if let Some(np) = self.nps.get_pt(name) {
+        if let Some(np) = self.nps.borrow().get_pt(name) {
             let wnp = WasmNamedPoint {
                 name: name.into(),
                 color: np.color().as_string(),
@@ -405,7 +414,7 @@ impl WasmNamedPointSet {
     #[wasm_bindgen]
     pub fn pts(&mut self) -> Result<Array, JsValue> {
         let names = js_sys::Array::new();
-        for (name, _) in self.nps.iter() {
+        for (name, _) in self.nps.borrow().iter() {
             let name: JsValue = name.into();
             names.push(&name);
         }
@@ -414,7 +423,7 @@ impl WasmNamedPointSet {
 
     //mp set_model
     pub fn set_model(&self, name: &str, model: &[f64]) -> Result<(), String> {
-        if let Some(np) = self.nps.get_pt(name) {
+        if let Some(np) = self.nps.borrow().get_pt(name) {
             np.set_model(Some(point3d(model)?));
             Ok(())
         } else {
@@ -424,12 +433,48 @@ impl WasmNamedPointSet {
 
     //mp unset_model
     pub fn unset_model(&self, name: &str) -> Result<(), String> {
-        if let Some(np) = self.nps.get_pt(name) {
+        if let Some(np) = self.nps.borrow().get_pt(name) {
             np.set_model(None);
             Ok(())
         } else {
             Err("Could not find named point".into())
         }
+    }
+
+    //zz All done
+}
+
+//a WasmProject
+#[wasm_bindgen]
+pub struct WasmProject {
+    project: Project,
+}
+
+//ip WasmProject
+#[wasm_bindgen]
+impl WasmProject {
+    //cp new
+    /// Create a new WasmGraphCanvas attached to a Canvas HTML element,
+    /// adding events to the canvas that provide the paint program
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WasmProject {
+        let project = Project::default();
+        Self { project }
+    }
+
+    //ap nps
+    #[wasm_bindgen(getter)]
+    pub fn nps(&self) -> WasmNamedPointSet {
+        WasmNamedPointSet::of_nps(self.project.nps().clone())
+    }
+
+    //ap set_nps
+    #[wasm_bindgen(setter)]
+    pub fn set_nps(&mut self, wnps: &WasmNamedPointSet) {
+        // unsafe {
+        // crate::console_log!("Log {:?}", wnps.nps);
+        // }
+        self.project.set_nps(wnps.nps.clone());
     }
 
     //zz All done
