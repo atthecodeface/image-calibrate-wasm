@@ -32,7 +32,7 @@ fn point2d(pt: &[f64]) -> Result<Point2D, String> {
 //tp WasmCameraDatabase
 #[wasm_bindgen]
 pub struct WasmCameraDatabase {
-    cdb: CameraDatabase,
+    cdb: Rrc<CameraDatabase>,
 }
 
 //ip WasmCameraDatabase
@@ -43,8 +43,15 @@ impl WasmCameraDatabase {
     #[wasm_bindgen(constructor)]
     pub fn new(json: &str) -> Result<WasmCameraDatabase, JsValue> {
         let json = image_calibrate::json::remove_comments(json);
-        let cdb = CameraDatabase::from_json(&json).map_err(|e| e.to_string())?;
+        let cdb = CameraDatabase::from_json(&json)
+            .map_err(|e| e.to_string())?
+            .into();
         Ok(Self { cdb })
+    }
+
+    //cp of_cdb
+    fn of_cdb(cdb: Rrc<CameraDatabase>) -> Self {
+        Self { cdb }
     }
 }
 
@@ -103,7 +110,7 @@ impl WasmCameraInstance {
     #[wasm_bindgen(constructor)]
     pub fn new(cdb: &WasmCameraDatabase, json: &str) -> Result<WasmCameraInstance, JsValue> {
         let json = image_calibrate::json::remove_comments(json);
-        let camera = CameraInstance::from_json(&cdb.cdb, &json)?;
+        let camera = CameraInstance::from_json(&cdb.cdb.borrow(), &json)?;
         Ok(Self { camera })
     }
 
@@ -460,6 +467,21 @@ impl WasmProject {
     pub fn new() -> WasmProject {
         let project = Project::default();
         Self { project }
+    }
+
+    //ap cdb
+    #[wasm_bindgen(getter)]
+    pub fn cdb(&self) -> WasmCameraDatabase {
+        WasmCameraDatabase::of_cdb(self.project.cdb().clone())
+    }
+
+    //ap set_cdb
+    #[wasm_bindgen(setter)]
+    pub fn set_cdb(&mut self, wcdb: &WasmCameraDatabase) {
+        // unsafe {
+        // crate::console_log!("Log {:?}", wcdb.cdb);
+        // }
+        self.project.set_cdb(wcdb.cdb.clone());
     }
 
     //ap nps

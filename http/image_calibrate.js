@@ -353,7 +353,7 @@ class CIP {
     }
 
     //mp load_json
-    load_json(file_set, cdb, nps) {
+    load_json(file_set, project) {
         const cam_json = file_set.load_file("cam", this.cam_file);
         const pms_json = file_set.load_file("pms", this.pms_file);
 
@@ -369,9 +369,9 @@ class CIP {
             return;
         }
 
-        this.cam = new WasmCameraInstance(cdb, cam_json);
+        this.cam = new WasmCameraInstance(project.cdb, cam_json);
         this.pms = new WasmPointMappingSet();
-        this.pms.read_json(nps, pms_json);
+        this.pms.read_json(project.nps, pms_json);
 
         window.log.add_log(0, "cip", "load", `Loaded CIP ${this.cam_file}:${this.pms_file}:${this.img}`);
     }
@@ -397,7 +397,6 @@ class Project {
         this.cdb_file = null;
         this.nps_file = null;
         this.cips = [];
-        this.cdb = null;
         this.project = new WasmProject();
     }
 
@@ -428,7 +427,6 @@ class Project {
         this.name = name;
         this.nps_file = null;
         this.cdb_file = null;
-        this.cdb = null;
         this.cips = [];
 
         if (is_string(obj.nps)) {
@@ -475,14 +473,13 @@ class Project {
             return;
         }
 
-        this.cdb = new WasmCameraDatabase(cdb_json);
-
+        this.project.cdb = new WasmCameraDatabase(cdb_json);
         this.project.nps = new WasmNamedPointSet();
         this.project.nps.read_json(nps_json);
 
-        if (this.cdb && this.project.nps) {
+        if (this.project.cdb && this.project.nps) {
             for (const cip of this.cips) {
-                cip.load_json(this.file_set, this.cdb, this.project.nps);
+                cip.load_json(this.file_set, this.project);
             }
         }
         window.log.add_log(0, "project", "load", `Read project contents ${this.name}`);
