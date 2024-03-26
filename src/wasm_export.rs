@@ -167,10 +167,10 @@ impl WasmCameraInstance {
         n: usize,
         from_camera: bool,
     ) -> Result<WasmRay, String> {
-        if n < wpms.pms.mappings().len() {
+        if n < wpms.pms.borrow().mappings().len() {
             let ray = self
                 .camera
-                .get_pm_as_ray(&wpms.pms.mappings()[n], from_camera);
+                .get_pm_as_ray(&wpms.pms.borrow().mappings()[n], from_camera);
             Ok(WasmRay { ray })
             /* WasmRay::new(
                 ray.start.as_ref(),
@@ -198,19 +198,19 @@ impl WasmCameraInstance {
 
     //mp locate_using_model_lines
     pub fn locate_using_model_lines(&mut self, wpms: &WasmPointMappingSet) -> f64 {
-        self.camera.locate_using_model_lines(&wpms.pms)
+        self.camera.locate_using_model_lines(&wpms.pms.borrow())
     }
 
     //mp orient_using_rays_from_model
     pub fn orient_using_rays_from_model(&mut self, wpms: &WasmPointMappingSet) -> f64 {
         self.camera
-            .orient_using_rays_from_model(wpms.pms.mappings())
+            .orient_using_rays_from_model(wpms.pms.borrow().mappings())
     }
 
     //mp reorient_using_rays_from_model
     pub fn reorient_using_rays_from_model(&mut self, wpms: &WasmPointMappingSet) -> f64 {
         self.camera
-            .reorient_using_rays_from_model(wpms.pms.mappings())
+            .reorient_using_rays_from_model(wpms.pms.borrow().mappings())
     }
 
     //zz All done
@@ -220,7 +220,7 @@ impl WasmCameraInstance {
 //tp WasmPointMappingSet
 #[wasm_bindgen]
 pub struct WasmPointMappingSet {
-    pms: PointMappingSet,
+    pms: Rrc<PointMappingSet>,
 }
 
 //ip WasmPointMappingSet
@@ -230,7 +230,7 @@ impl WasmPointMappingSet {
     /// Create a new WasmPointMappingSet from a camera database and a Json file
     #[wasm_bindgen(constructor)]
     pub fn new() -> WasmPointMappingSet {
-        let pms = PointMappingSet::default();
+        let pms = PointMappingSet::default().into();
         Self { pms }
     }
 
@@ -238,7 +238,10 @@ impl WasmPointMappingSet {
     /// Read a json file to add to the points
     pub fn read_json(&mut self, wnps: &WasmNamedPointSet, json: &str) -> Result<(), JsValue> {
         let json = image_calibrate::json::remove_comments(json);
-        let nf = self.pms.read_json(&wnps.nps.borrow(), &json, true)?;
+        let nf = self
+            .pms
+            .borrow_mut()
+            .read_json(&wnps.nps.borrow(), &json, true)?;
         // if !nf.is_empty() {
         // eprintln!("Warning: {}", nf);
         // }
@@ -248,19 +251,20 @@ impl WasmPointMappingSet {
     //cp to_json
     #[wasm_bindgen]
     pub fn to_json(&self) -> Result<String, JsValue> {
-        Ok(self.pms.to_json()?)
+        Ok(self.pms.borrow().to_json()?)
     }
 
     //mp len
     /// Get the number of mappings
     pub fn len(&self) -> usize {
-        self.pms.mappings().len()
+        self.pms.borrow().mappings().len()
     }
 
     //mp get_name
     /// Get the nth point mapping
     pub fn get_name(&self, n: usize) -> Result<String, String> {
         self.pms
+            .borrow()
             .mappings()
             .get(n)
             .map(|m| m.model.name().into())
@@ -271,6 +275,7 @@ impl WasmPointMappingSet {
     /// Get the XY coords and error
     pub fn get_xy_err(&self, n: usize) -> Result<Box<[f64]>, String> {
         self.pms
+            .borrow()
             .mappings()
             .get(n)
             .map(|m| [m.screen()[0], m.screen()[1], m.error()].into())
@@ -280,6 +285,7 @@ impl WasmPointMappingSet {
     //mp mapping_of_name
     pub fn mapping_of_name(&self, name: &str) -> Option<usize> {
         self.pms
+            .borrow()
             .mappings()
             .iter()
             .enumerate()
@@ -298,12 +304,13 @@ impl WasmPointMappingSet {
     ) -> Result<bool, String> {
         Ok(self
             .pms
+            .borrow_mut()
             .add_mapping(&wnps.nps.borrow(), name, &point2d(screen)?, error))
     }
 
     //mp remove_mapping
     pub fn remove_mapping(&mut self, n: usize) -> Result<(), String> {
-        if !self.pms.remove_mapping(n) {
+        if !self.pms.borrow_mut().remove_mapping(n) {
             Err("Index out of range".into())
         } else {
             Ok(())
