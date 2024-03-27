@@ -339,11 +339,7 @@ class FileSet {
 class Project {
 
     //fp constructor
-    constructor(file_set, name) {
-        this.file_set = file_set;
-        this.name = name;
-        this.cdb_file = null;
-        this.nps_file = null;
+    constructor(name) {
         this.project = new WasmProject();
     }
 
@@ -357,22 +353,6 @@ class Project {
         return this.project.cip(n);
     }
 
-    //mp is_valid
-    is_valid() {
-        return (this.cdb_file && this.nps_file && (this.ncips()>0));
-    }
-
-    //mp as_json
-    as_json() {
-        const obj = {
-            "name": this.name,
-            "nps": this.nps_file,
-            "cdb": this.cdb_file,
-            "cips": this.banana.jscips.names(),
-        };
-        return JSON.stringify(obj);
-    }
-
     //mp from_json
     from_json(name, json) {
         const obj = parse_json(json);
@@ -382,94 +362,18 @@ class Project {
         }
 
         this.project = new WasmProject();
-        this.name = name;
-        this.nps_file = null;
-        this.cdb_file = null;
 
         if (is_array(obj.nps)) {
-            console.log("Should load full project");
-            console.log(this.project.read_json(json))
-            return false;
+            this.project.read_json(json);
+            return true;
         }
-
-        if (is_string(obj.nps)) {
-            this.nps_file = obj.nps;
-        }
-        if (is_string(obj.cdb)) {
-            this.cdb_file = obj.cdb;
-        }
-        if (!is_array(obj.cips)) {
-            return;
-        }
-        for (const cp of obj.cips) {
-            if (is_string(cp[0]) && is_string(cp[1]) && is_string(cp[2])) {
-                const cip = new WasmCip(cp[0], cp[1], cp[2]);
-                this.project.add_cip(cip);
-            }
-        }
-        return true;
+        window.log.add_log(5, "project", "json", `Failed to parse json for project ${name}`);
+        return false;
     }
 
     //mp to_json
     to_json() {
-        return this.project.to_json();
-    }
-
-    //mp load_json
-    load_json() {
-        let json = this.file_set.load_file("proj",this.name);
-        if (json) {
-            this.from_json(this.name, json);
-        } else {
-            window.log.add_log(5, "project", "load", `Failed to load json for project ${this.name}`);
-        }
-    }
-
-    //mp load_contents
-    load_contents() {
-        const cdb_json = this.file_set.load_file("cdb", this.cdb_file);
-        const nps_json = this.file_set.load_file("nps", this.nps_file);
-        if (!cdb_json) {
-            window.log.add_log(5, "project", "load", `Failed to read cdb ${this.cdb_file} for project ${name}`);
-            return;
-        }
-        if (!nps_json) {
-            window.log.add_log(5, "project", "load", `Failed to read nps ${this.nps_file} for project ${name}`);
-            return;
-        }
-
-        this.project.cdb = new WasmCameraDatabase(cdb_json);
-        this.project.nps = new WasmNamedPointSet();
-        this.project.nps.read_json(nps_json);
-
-        for (let i=0; i<this.project.ncips(); i++) {
-            const cip = this.project.cip(i);
-            const cam_json = this.file_set.load_file("cam", cip.cam_file);
-            const pms_json = this.file_set.load_file("pms", cip.pms_file);
-
-            if (!cam_json) {
-                window.log.add_log(5, "cip", "load", `Failed to read camera JSON file '${cip.cam_file}'`);
-                continue;
-            }
-            if (!pms_json) {
-                window.log.add_log(5, "cip", "load", `Failed to read PMS JSON file '${cip.pms_file}`);
-                continue;
-            }
-
-            cip.camera = new WasmCameraInstance(this.project.cdb, cam_json);
-            cip.pms.read_json(this.project.nps, pms_json);
-            const warnings = this.project.cip_read_json(i, cam_json, pms_json);
-            if (warnings != "") {
-                window.log.add_log(2, "cip", "load", `Warnings ${warnings}}`);
-            }
-            window.log.add_log(0, "cip", "load", `Loaded CIP ${cip.cam_file}:${cip.pms_file}:${cip.img}`);
-        }
-        window.log.add_log(0, "project", "load", `Read project contents ${this.name}`);
-    }        
-
-    //mp save_nps
-    save_nps() {
-        this.file_set.save_file("nps", this.nps_file, this.project.nps.to_json());
+        return this.project.to_json(true);
     }
 
     //mp locate_all
@@ -507,23 +411,24 @@ class Ic {
     //fp constructor
     constructor(file_set) {
         this.file_set = file_set;
-        this.project = new Project(this.file_set, "None");
+        this.project = new Project();
+        this.project_name = null;
         this.cip_of_project = 0;
         this.trace_ray_name = null;
     }
 
-    //mp load_proj
-    load_proj(name) {
+    //mp load_project
+    load_project(name) {
         const data = this.file_set.load_file("proj", name);
         if (!data) {
             window.log.add_log(5, "project", "load", `Failed to read project ${name}`);
             return;
         }
+        this.project_name = name;
         if (this.project.from_json(name, data)) {
-            this.project.load_contents();
+            this.select_cip_of_project(0);
+            window.log.add_log(0, "project", "load", `Read project ${name}`);
         }
-        this.select_cip_of_project(0);
-        window.log.add_log(0, "project", "load", `Read project ${name}`);
     }
 
     //mp select_cip_of_project
@@ -565,7 +470,7 @@ class Ic {
 
     //mp save_project
     save_project() {
-        this.file_set.save_file("proj", this.project.name, this.project.to_json());
+        this.file_set.save_file("proj", this.project_name, this.project.to_json());
     }
 
     //mp redraw_nps
@@ -850,7 +755,9 @@ class ImageCanvas {
         this.image_div.height = height;
 
         this.image.addEventListener('load', function(e) { me.redraw_canvas(); } );
-        this.load_proj("nac_proj.json");
+        const proj = this.file_set.dir().files_of_type("proj")[0];
+        console.log(this.file_set.dir().files_of_type("proj"));
+        this.load_project(proj);
         }
 
     //mp update_info
@@ -1057,9 +964,9 @@ class ImageCanvas {
         }
     }
     
-    //mp load_proj
-    load_proj(proj) {
-        this.ic.load_proj(proj);
+    //mp load_project
+    load_project(proj) {
+        this.ic.load_project(proj);
         this.image.src = this.ic.img_src;
         this.refill_cip_list();
         this.select_cip_of_project(0);
@@ -1399,6 +1306,27 @@ class Browser {
         this.repopulate();
     }
 
+    //mp file_link
+    file_link(type, f) {
+        const link = document.createElement("a");
+        link.innerText = f;
+        link.download = f;
+        const me = this;
+        link.addEventListener('click',
+                              function(value) {
+                                  const data = me.file_set.load_file(type, f);
+                                  this.href = `data:application/json;${data}`;
+                                  this.href = "data:application/json," + encodeURIComponent(data)+"";
+                              }
+                             );
+        link.href = f;
+        // const linkSource = `data:application/pdf;base64,${pdf}`;
+        // const fileName = "vct_illustration.pdf";
+        // downloadLink.href = linkSource;
+        // downloadLink.download = fileName;
+        return link;
+    }
+
     //mp repopulate
     repopulate() {
         while (this.browser.firstChild) {
@@ -1417,7 +1345,8 @@ class Browser {
             for (const l of obj.lenses) {
                 lenses_html += `${l.name}<br>`;
             }
-            cdb_contents.push( [f, bodies_html, lenses_html] );
+            const link = this.file_link("cdb", f);
+            cdb_contents.push( [link, bodies_html, lenses_html] );
         }
         this.create_file_table("cdb", "Camera Database", ["Filename", "Bodies", "Lenses"], cdb_contents);
 
@@ -1425,7 +1354,8 @@ class Browser {
         for (const f of window.file_set.dir().files_of_type("proj")) {
             let t = this.file_set.load_file("proj", f);
             const obj = parse_json(t);
-            proj_contents.push( [f, obj.cdb, obj.nps, obj.cips.length] );
+            const link = this.file_link("proj", f);
+            proj_contents.push( [link, obj.cdb, obj.nps, obj.cips.length] );
         }
         this.create_file_table("proj", "Projects", ["Filename", "Cdb", "Nps", "Number CIP"], proj_contents);
 
@@ -1483,7 +1413,11 @@ class Browser {
             tr = document.createElement("tr");
             for (const d of c) {
                 const td = document.createElement("td");
-                td.innerHTML = d;
+                if (d instanceof HTMLElement) {
+                    td.appendChild(d);
+                } else {
+                    td.innerHTML = d;
+                }
                 tr.appendChild(td);
             }
             table.appendChild(tr);
@@ -1527,7 +1461,7 @@ init().then(() => {
     const project_list = document.getElementById("project_list");
     if (project_list) {
         const me = project_list;
-        project_list.addEventListener('click', function(value) {window.image_canvas.load_proj(me.selectedOptions[0].value);} );
+        project_list.addEventListener('click', function(value) {window.image_canvas.load_project(me.selectedOptions[0].value);} );
         while (project_list.firstChild) {
             project_list.removeChild(project_list.firstChild);
         }

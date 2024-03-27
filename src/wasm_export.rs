@@ -580,8 +580,8 @@ impl WasmProject {
 
     //mp to_json
     #[wasm_bindgen]
-    pub fn to_json(&self) -> Result<String, JsValue> {
-        Ok(self.project.to_json()?)
+    pub fn to_json(&self, pretty: bool) -> Result<String, JsValue> {
+        Ok(self.project.to_json(pretty)?)
     }
 
     //cp read_json
