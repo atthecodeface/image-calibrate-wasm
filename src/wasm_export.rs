@@ -277,9 +277,10 @@ impl WasmPointMappingSet {
         Ok(self.pms.borrow().to_json()?)
     }
 
-    //mp len
+    //mp length
     /// Get the number of mappings
-    pub fn len(&self) -> usize {
+    #[wasm_bindgen(getter)]
+    pub fn length(&self) -> usize {
         self.pms.borrow().mappings().len()
     }
 
@@ -291,6 +292,17 @@ impl WasmPointMappingSet {
             .mappings()
             .get(n)
             .map(|m| m.model.name().into())
+            .ok_or("Index out of range".into())
+    }
+
+    //mp get_xy
+    /// Get the XY coords
+    pub fn get_xy(&self, n: usize) -> Result<Box<[f64]>, String> {
+        self.pms
+            .borrow()
+            .mappings()
+            .get(n)
+            .map(|m| [m.screen()[0], m.screen()[1]].into())
             .ok_or("Index out of range".into())
     }
 
@@ -564,6 +576,20 @@ impl WasmProject {
     pub fn new() -> WasmProject {
         let project = Project::default();
         Self { project }
+    }
+
+    //mp to_json
+    #[wasm_bindgen]
+    pub fn to_json(&self) -> Result<String, JsValue> {
+        Ok(self.project.to_json()?)
+    }
+
+    //cp read_json
+    #[wasm_bindgen]
+    pub fn read_json(&mut self, json: &str) -> Result<(), JsValue> {
+        let json = image_calibrate::json::remove_comments(json);
+        self.project = Project::from_json(&json)?;
+        Ok(())
     }
 
     //ap cdb

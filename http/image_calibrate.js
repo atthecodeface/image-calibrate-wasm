@@ -378,12 +378,19 @@ class Project {
         const obj = parse_json(json);
         if (!obj) {
             window.log.add_log(5, "project", "json", `Failed to parse json for project ${name}`);
-            return;
+            return false;
         }
+
         this.project = new WasmProject();
         this.name = name;
         this.nps_file = null;
         this.cdb_file = null;
+
+        if (is_array(obj.nps)) {
+            console.log("Should load full project");
+            console.log(this.project.read_json(json))
+            return false;
+        }
 
         if (is_string(obj.nps)) {
             this.nps_file = obj.nps;
@@ -400,11 +407,12 @@ class Project {
                 this.project.add_cip(cip);
             }
         }
+        return true;
     }
 
-    //mp save_json
-    save_json() {
-        this.file_set.save_file("proj", this.name, this.as_json());
+    //mp to_json
+    to_json() {
+        return this.project.to_json();
     }
 
     //mp load_json
@@ -511,12 +519,9 @@ class Ic {
             window.log.add_log(5, "project", "load", `Failed to read project ${name}`);
             return;
         }
-        this.project.from_json(name, data);
-        if (!this.project.is_valid()) {
-            window.log.add_log(5, "project", "load", `Failed to parse project data for ${name}`);
-            return;
+        if (this.project.from_json(name, data)) {
+            this.project.load_contents();
         }
-        this.project.load_contents();
         this.select_cip_of_project(0);
         window.log.add_log(0, "project", "load", `Read project ${name}`);
     }
@@ -558,6 +563,11 @@ class Ic {
         }
     }
 
+    //mp save_project
+    save_project() {
+        this.file_set.save_file("proj", this.project.name, this.project.to_json());
+    }
+
     //mp redraw_nps
     redraw_nps(ctx, zw) {
         const nps = this.project.project.nps;
@@ -586,12 +596,12 @@ class Ic {
         const cw = 2;
         const nps = this.project.project.nps;
         
-        let num_mappings = this.pms.len();
+        let num_mappings = this.pms.length;
         for (let i = 0; i < num_mappings; i++) { 
             const n = this.pms.get_name(i);
             const p = nps.get_pt(n);
-            const xye = this.pms.get_xy_err(i);
-            const sxy = zw.scr_xy_of_img_xy([xye[0], xye[1]]);
+            const xy = this.pms.get_xy(i);
+            const sxy = zw.scr_xy_of_img_xy(xy);
             ctx.strokeStyle = p.color();
             ctx.beginPath();
             ctx.arc(sxy[0], sxy[1], cl, 0, Math.PI * 2, true);
@@ -1292,6 +1302,11 @@ class ImageCanvas {
     //mp save_all
     save_all() {
         this.ic.save_all();
+    }
+
+    //mp save_project
+    save_project() {
+        this.ic.save_project();
     }
 
     //mp delete_pms
