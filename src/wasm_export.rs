@@ -503,6 +503,24 @@ impl WasmCip {
         Self { cip }
     }
 
+    //ap cam_file
+    #[wasm_bindgen(getter)]
+    pub fn cam_file(&self) -> String {
+        self.cip.borrow().camera_file().into()
+    }
+
+    //ap img
+    #[wasm_bindgen(getter)]
+    pub fn img(&self) -> String {
+        self.cip.borrow().image().into()
+    }
+
+    //ap pms_file
+    #[wasm_bindgen(getter)]
+    pub fn pms_file(&self) -> String {
+        self.cip.borrow().pms_file().into()
+    }
+
     //ap camera
     #[wasm_bindgen(getter)]
     pub fn camera(&self) -> WasmCameraInstance {
