@@ -335,29 +335,6 @@ class FileSet {
     //zz All done
 }
 
-//a CIP
-class OldCIP {
-
-    //fp constructor
-    constructor(cam_file, pms_file, img) {
-        this.cam_file = cam_file;
-        this.pms_file = pms_file;
-        this.img = img;
-        this.cip = new WasmCip(this.cam_file, this.img, this.pms_file);
-    } 
-
-    //ap names
-    names() {
-        return [this.cam_file, this.img, this.pms_file];
-    }
-
-    //mp load_json
-    load_json(project, cam_json, pms_json) {
-
-    }
-
-}
-
 //a Project
 class Project {
 
@@ -367,13 +344,22 @@ class Project {
         this.name = name;
         this.cdb_file = null;
         this.nps_file = null;
-        this.cips = [];
         this.project = new WasmProject();
+    }
+
+    //mp ncips
+    ncips() {
+        return this.project.ncips();
+    }
+
+    //mp cip
+    cip(n) {
+        return this.project.cip(n);
     }
 
     //mp is_valid
     is_valid() {
-        return (this.cdb_file && this.nps_file && (this.cips.length>0));
+        return (this.cdb_file && this.nps_file && (this.ncips()>0));
     }
 
     //mp as_json
@@ -382,7 +368,7 @@ class Project {
             "name": this.name,
             "nps": this.nps_file,
             "cdb": this.cdb_file,
-            "cips": this.banana.cips.names(),
+            "cips": this.banana.jscips.names(),
         };
         return JSON.stringify(obj);
     }
@@ -398,7 +384,6 @@ class Project {
         this.name = name;
         this.nps_file = null;
         this.cdb_file = null;
-        this.cips = [];
 
         if (is_string(obj.nps)) {
             this.nps_file = obj.nps;
@@ -412,7 +397,7 @@ class Project {
         for (const cp of obj.cips) {
             if (is_string(cp[0]) && is_string(cp[1]) && is_string(cp[2])) {
                 const cip = new WasmCip(cp[0], cp[1], cp[2]);
-                this.cips.push(cip);
+                this.project.add_cip(cip);
             }
         }
     }
@@ -449,26 +434,27 @@ class Project {
         this.project.nps = new WasmNamedPointSet();
         this.project.nps.read_json(nps_json);
 
-        if (this.project.cdb && this.project.nps) {
-            for (const cip of this.cips) {
+        for (let i=0; i<this.project.ncips(); i++) {
+            const cip = this.project.cip(i);
+            const cam_json = this.file_set.load_file("cam", cip.cam_file);
+            const pms_json = this.file_set.load_file("pms", cip.pms_file);
 
-                const cam_json = this.file_set.load_file("cam", cip.cam_file);
-                const pms_json = this.file_set.load_file("pms", cip.pms_file);
-
-                if (!cam_json) {
-                    window.log.add_log(5, "cip", "load", `Failed to read camera JSON file '${cip.cam_file}'`);
-                    continue;
-                }
-                if (!pms_json) {
-                    window.log.add_log(5, "cip", "load", `Failed to read PMS JSON file '${cip.pms_file}`);
-                    continue;
-                }
-
-                cip.camera = new WasmCameraInstance(this.project.cdb, cam_json);
-                cip.pms.read_json(this.project.nps, pms_json);
-                
-                window.log.add_log(0, "cip", "load", `Loaded CIP ${cip.cam_file}:${cip.pms_file}:${cip.img}`);
+            if (!cam_json) {
+                window.log.add_log(5, "cip", "load", `Failed to read camera JSON file '${cip.cam_file}'`);
+                continue;
             }
+            if (!pms_json) {
+                window.log.add_log(5, "cip", "load", `Failed to read PMS JSON file '${cip.pms_file}`);
+                continue;
+            }
+
+            cip.camera = new WasmCameraInstance(this.project.cdb, cam_json);
+            cip.pms.read_json(this.project.nps, pms_json);
+            const warnings = this.project.cip_read_json(i, cam_json, pms_json);
+            if (warnings != "") {
+                window.log.add_log(2, "cip", "load", `Warnings ${warnings}}`);
+            }
+            window.log.add_log(0, "cip", "load", `Loaded CIP ${cip.cam_file}:${cip.pms_file}:${cip.img}`);
         }
         window.log.add_log(0, "project", "load", `Read project contents ${this.name}`);
     }        
@@ -476,6 +462,32 @@ class Project {
     //mp save_nps
     save_nps() {
         this.file_set.save_file("nps", this.nps_file, this.project.nps.to_json());
+    }
+
+    //mp locate_all
+    locate_all() {
+        for (let i=0; i<this.project.ncips(); i++) {
+            const cip = this.project.cip(i);
+            cip.camera.locate_using_model_lines(cip.pms);
+            cip.camera.reorient_using_rays_from_model(cip.pms);
+        }
+    }
+    //mp derive_nps_location
+    derive_nps_location(name) {
+        let rays = []
+        for (let i=0; i<this.project.ncips(); i++) {
+            const cip = this.project.cip(i);
+            const mapping = cip.pms.mapping_of_name(name);
+            if (!mapping) {
+                continue;
+            }
+            rays.push(cip.camera.get_pm_as_ray(cip.pms, mapping, true));
+        }
+        if (rays.length > 1) {
+            return WasmRay.closest_model_to_intersection(rays);
+        } else  {
+            return null;
+        }
     }
 
     //zz All done
@@ -512,7 +524,7 @@ class Ic {
     //mp select_cip_of_project
     select_cip_of_project(n) {
         this.cip_of_project = n;
-        const cip = this.project.cips[this.cip_of_project];
+        const cip = this.project.cip(this.cip_of_project);
         this.cam = cip.camera;
         this.pms = cip.pms;
         this.img_src = cip.img;
@@ -523,11 +535,11 @@ class Ic {
         if (n === undefined) {
             n = this.cip_of_project;
         }
-        const cip = this.project.cips[n];
-
+        const cip = this.project.cip(n);
         const cam_json = cip.camera.to_json();
-        const pms_json = cip.pms.to_json();
         this.file_set.save_file("cam", cip.cam_file, cam_json);
+
+        const pms_json = cip.pms.to_json();
         this.file_set.save_file("pms", cip.pms_file, pms_json);
 
         window.log.add_log(0, "cip", "save", `Saved CIP ${cip.cam_file}:${cip.pms_file}`);
@@ -536,6 +548,14 @@ class Ic {
     //mp save_nps
     save_nps() {
         this.project.save_nps();
+    }
+
+    //mp save_all
+    save_all() {
+        this.save_nps();
+        for (let i=0; i<this.project.ncips(); i++) {
+            this.save_cip(i);
+        }
     }
 
     //mp redraw_nps
@@ -591,11 +611,11 @@ class Ic {
         ctx.strokeStyle = p.color();
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for (const i in this.project.cips) {
+        for (let i=0; i<this.project.ncips(); i++) {
             if (i == this.cip_of_project) {
                 continue;
             }
-            const cip = this.project.cips[i];
+            const cip = this.project.cip(i);
             const mapping = cip.pms.mapping_of_name(name);
             if (!mapping) {
                 continue;
@@ -1018,10 +1038,10 @@ class ImageCanvas {
             while (cip_list.firstChild) {
                 cip_list.removeChild(cip_list.firstChild);
             }
-            for (const p in this.ic.project.cips) {
+            for (let i=0; i<this.ic.project.ncips(); i++) {
                 const opt = document.createElement("option");
-                opt.setAttribute("value", p);
-                opt.innerText = p;
+                opt.setAttribute("value", i);
+                opt.innerText = i;
                 cip_list.appendChild(opt);
             }
         }
@@ -1204,8 +1224,8 @@ class ImageCanvas {
         if (camera_info) {
             html_clear(camera_info);
 
-            const cip = this.ic.project.cips[this.ic.cip_of_project];
-            const n_cip = this.ic.project.cips.length;
+            const cip = this.ic.project.cip(this.ic.cip_of_project);
+            const n_cip = this.ic.project.ncips();
             const cip_num = `${this.ic.cip_of_project} of ${n_cip}`;
             const itable = html_vtable("", 
                                        [ ["CIP", cip_num],
@@ -1271,10 +1291,7 @@ class ImageCanvas {
 
     //mp save_all
     save_all() {
-        this.ic.save_nps();
-        for (const i in this.ic.project.cips) {
-            this.ic.save_cip(i);
-        }
+        this.ic.save_all();
     }
 
     //mp delete_pms
@@ -1333,21 +1350,11 @@ class ImageCanvas {
 
     //mp derive_nps_location
     derive_nps_location(name) {
-        let rays = []
-        for (const cip of this.ic.project.cips) {
-            const mapping = cip.pms.mapping_of_name(name);
-            if (!mapping) {
-                continue;
-            }
-            rays.push(cip.camera.get_pm_as_ray(cip.pms, mapping, true));
-        }
-        if (rays.length > 1) {
-            const xyz = WasmRay.closest_model_to_intersection(rays);
-            if (xyz) {
-                this.ic.project.project.nps.set_model(name, xyz);
-                this.refill_nps_pms();
-                this.redraw_canvas();
-            }
+        const xyz = this.ic.project.derive_nps_location(name);
+        if (xyz) {
+            this.ic.project.project.nps.set_model(name, xyz);
+            this.refill_nps_pms();
+            this.redraw_canvas();
         }
     }
 
@@ -1359,10 +1366,7 @@ class ImageCanvas {
     }
     //mp locate_all
     locate_all() {
-        for (const cip of this.ic.project.cips) {
-            cip.camera.locate_using_model_lines(cip.pms);
-            cip.camera.reorient_using_rays_from_model(cip.pms);
-        }
+        this.ic.project.locate_all()
         this.refill_camera_info();
         this.redraw_canvas();
     }

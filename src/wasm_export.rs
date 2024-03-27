@@ -483,6 +483,7 @@ impl WasmNamedPointSet {
 
 //a WasmCip
 #[wasm_bindgen]
+#[derive(Debug)]
 pub struct WasmCip {
     cip: Rrc<Cip>,
 }
@@ -500,6 +501,11 @@ impl WasmCip {
         cip.set_image(image);
         cip.set_pms_file(pms_file);
         let cip = cip.into();
+        Self { cip }
+    }
+
+    //cp of_cip
+    fn of_cip(cip: Rrc<Cip>) -> Self {
         Self { cip }
     }
 
@@ -588,6 +594,42 @@ impl WasmProject {
         // crate::console_log!("Log {:?}", wnps.nps);
         // }
         self.project.set_nps(wnps.nps.clone());
+    }
+
+    //mp add_cip
+    pub fn add_cip(&mut self, cip: &WasmCip) -> usize {
+        self.project.add_cip(cip.cip.clone())
+    }
+
+    //ap ncips
+    pub fn ncips(&self) -> usize {
+        self.project.ncips()
+    }
+
+    //mp cip
+    pub fn cip(&self, n: usize) -> Result<WasmCip, String> {
+        if n >= self.project.ncips() {
+            Err("Cip index out of range".into())
+        } else {
+            Ok(WasmCip::of_cip(self.project.cip(n).clone()))
+        }
+    }
+
+    //mp cip_read_json
+    pub fn cip_read_json(
+        &self,
+        n: usize,
+        camera_json: &str,
+        pms_json: &str,
+    ) -> Result<String, String> {
+        if n >= self.project.ncips() {
+            Err("Cip index out of range".into())
+        } else {
+            self.project
+                .cip(n)
+                .borrow_mut()
+                .read_json(&self.project, camera_json, pms_json)
+        }
     }
 
     //zz All done
