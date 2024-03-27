@@ -335,84 +335,15 @@ class FileSet {
     //zz All done
 }
 
-//a Project
-class Project {
-
-    //fp constructor
-    constructor(name) {
-        this.project = new WasmProject();
-    }
-
-    //mp ncips
-    ncips() {
-        return this.project.ncips();
-    }
-
-    //mp cip
-    cip(n) {
-        return this.project.cip(n);
-    }
-
-    //mp from_json
-    from_json(name, json) {
-        const obj = parse_json(json);
-        if (!obj) {
-            window.log.add_log(5, "project", "json", `Failed to parse json for project ${name}`);
-            return false;
-        }
-
-        this.project = new WasmProject();
-
-        if (is_array(obj.nps)) {
-            this.project.read_json(json);
-            return true;
-        }
-        window.log.add_log(5, "project", "json", `Failed to parse json for project ${name}`);
-        return false;
-    }
-
-    //mp to_json
-    to_json() {
-        return this.project.to_json(true);
-    }
-
-    //mp locate_all
-    locate_all() {
-        for (let i=0; i<this.project.ncips(); i++) {
-            const cip = this.project.cip(i);
-            cip.camera.locate_using_model_lines(cip.pms);
-            cip.camera.reorient_using_rays_from_model(cip.pms);
-        }
-    }
-    //mp derive_nps_location
-    derive_nps_location(name) {
-        let rays = []
-        for (let i=0; i<this.project.ncips(); i++) {
-            const cip = this.project.cip(i);
-            const mapping = cip.pms.mapping_of_name(name);
-            if (!mapping) {
-                continue;
-            }
-            rays.push(cip.camera.get_pm_as_ray(cip.pms, mapping, true));
-        }
-        if (rays.length > 1) {
-            return WasmRay.closest_model_to_intersection(rays);
-        } else  {
-            return null;
-        }
-    }
-
-    //zz All done
-}
-
 //a Ic
 class Ic {
 
     //fp constructor
     constructor(file_set) {
         this.file_set = file_set;
-        this.project = new Project();
+        this.project = new WasmProject();
         this.project_name = null;
+        this.nps = null;
         this.cip_of_project = 0;
         this.trace_ray_name = null;
     }
@@ -425,65 +356,64 @@ class Ic {
             return;
         }
         this.project_name = name;
-        if (this.project.from_json(name, data)) {
-            this.select_cip_of_project(0);
-            window.log.add_log(0, "project", "load", `Read project ${name}`);
-        }
+        this.project = new WasmProject();
+
+        this.project.read_json(data);
+        this.nps = this.project.nps;
+        this.select_cip_of_project(0);
+        window.log.add_log(0, "project", "load", `Read project ${name}`);
     }
 
     //mp select_cip_of_project
     select_cip_of_project(n) {
+        if (n > this.ncips()) {
+            n = 0;
+        }
         this.cip_of_project = n;
-        const cip = this.project.cip(this.cip_of_project);
+        const cip = this.cip(this.cip_of_project);
         this.cam = cip.camera;
         this.pms = cip.pms;
         this.img_src = cip.img;
     }
 
-    //mp save_cip
-    save_cip(n) {
-        if (n === undefined) {
-            n = this.cip_of_project;
-        }
-        const cip = this.project.cip(n);
-        const cam_json = cip.camera.to_json();
-        this.file_set.save_file("cam", cip.cam_file, cam_json);
-
-        const pms_json = cip.pms.to_json();
-        this.file_set.save_file("pms", cip.pms_file, pms_json);
-
-        window.log.add_log(0, "cip", "save", `Saved CIP ${cip.cam_file}:${cip.pms_file}`);
+    //mp ncips
+    ncips() {
+        return this.project.ncips();
     }
 
-    //mp save_nps
-    save_nps() {
-        this.project.save_nps();
-    }
-
-    //mp save_all
-    save_all() {
-        this.save_nps();
-        for (let i=0; i<this.project.ncips(); i++) {
-            this.save_cip(i);
-        }
+    //mp cip
+    cip(n) {
+        return this.project.cip(n);
     }
 
     //mp save_project
     save_project() {
-        this.file_set.save_file("proj", this.project_name, this.project.to_json());
+        this.file_set.save_file("proj",
+                                this.project_name,
+                                this.project.to_json(true)
+                               );
+    }
+
+    //mp locate_all
+    locate_all() {
+        this.project.locate_all();
+    }
+
+    //mp derive_nps_location
+    derive_nps_location(name) {
+        return this.project.derive_nps_location(name);
     }
 
     //mp redraw_nps
     redraw_nps(ctx, zw) {
-        const nps = this.project.project.nps;
-        if (!nps) {
+        if (!this.nps) {
             return;
         }
         const cl = 6;
         const cw = 2;
 
-        for (const name of nps.pts()) {
-            const p = nps.get_pt(name);
+        for (const name of this.nps.pts()) {
+            const p = this.nps.get_pt(name);
             const xyz = p.model();
             const pxy = zw.scr_xy_of_img_xy(this.cam.map_model(xyz));
             ctx.fillStyle = p.color();
@@ -499,12 +429,11 @@ class Ic {
         }
         const cl = 6;
         const cw = 2;
-        const nps = this.project.project.nps;
         
         let num_mappings = this.pms.length;
         for (let i = 0; i < num_mappings; i++) { 
             const n = this.pms.get_name(i);
-            const p = nps.get_pt(n);
+            const p = this.nps.get_pt(n);
             const xy = this.pms.get_xy(i);
             const sxy = zw.scr_xy_of_img_xy(xy);
             ctx.strokeStyle = p.color();
@@ -516,21 +445,21 @@ class Ic {
 
     //mp redraw_rays
     redraw_rays(ctx, name, zw) {
-        if (!this.project.project.nps || !name) {
+        if (!this.nps || !name) {
             return;
         }
-        const p = this.project.project.nps.get_pt(name);
+        const p = this.nps.get_pt(name);
         if (!p) {
             return;
         }
         ctx.strokeStyle = p.color();
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let i=0; i<this.project.ncips(); i++) {
+        for (let i=0; i<this.ncips(); i++) {
             if (i == this.cip_of_project) {
                 continue;
             }
-            const cip = this.project.cip(i);
+            const cip = this.cip(i);
             const mapping = cip.pms.mapping_of_name(name);
             if (!mapping) {
                 continue;
@@ -955,7 +884,7 @@ class ImageCanvas {
             while (cip_list.firstChild) {
                 cip_list.removeChild(cip_list.firstChild);
             }
-            for (let i=0; i<this.ic.project.ncips(); i++) {
+            for (let i=0; i<this.ic.ncips(); i++) {
                 const opt = document.createElement("option");
                 opt.setAttribute("value", i);
                 opt.innerText = i;
@@ -1104,8 +1033,8 @@ class ImageCanvas {
             const pms = this.ic.pms;
             const cam = this.ic.cam;
 
-            for (const np_name of this.ic.project.project.nps.pts().sort()) {
-                const np = this.ic.project.project.nps.get_pt(np_name);
+            for (const np_name of this.ic.nps.pts().sort()) {
+                const np = this.ic.nps.get_pt(np_name);
                 const np_style = `style='color: ${np.color()};'}`;
                 const np_img = cam.map_model(np.model());
                 const np_x = np_img[0];
@@ -1141,8 +1070,8 @@ class ImageCanvas {
         if (camera_info) {
             html_clear(camera_info);
 
-            const cip = this.ic.project.cip(this.ic.cip_of_project);
-            const n_cip = this.ic.project.ncips();
+            const cip = this.ic.cip(this.ic.cip_of_project);
+            const n_cip = this.ic.ncips();
             const cip_num = `${this.ic.cip_of_project} of ${n_cip}`;
             const itable = html_vtable("", 
                                        [ ["CIP", cip_num],
@@ -1196,21 +1125,6 @@ class ImageCanvas {
         this.redraw_canvas();
     }
 
-    //mp save_cip
-    save_cip() {
-        this.ic.save_cip();
-    }
-
-    //mp save_nps
-    save_nps() {
-        this.ic.save_nps();
-    }
-
-    //mp save_all
-    save_all() {
-        this.ic.save_all();
-    }
-
     //mp save_project
     save_project() {
         this.ic.save_project();
@@ -1232,7 +1146,7 @@ class ImageCanvas {
         if (this.cursor) {
             const cx = this.cursor[0];
             const cy = this.cursor[1];
-            this.ic.pms.add_mapping(this.ic.project.project.nps, name, [cx, cy], 2);
+            this.ic.pms.add_mapping(this.ic.nps, name, [cx, cy], 2);
         }
         this.refill_nps_pms();
         this.redraw_canvas();
@@ -1246,7 +1160,7 @@ class ImageCanvas {
         if (!name) {
             for (let uid = 10*1000; true; uid=uid+1) {
                 name = `${uid}`;
-                if (!this.ic.project.project.nps.get_pt(name)) {
+                if (!this.ic.nps.get_pt(name)) {
                     break;
                 }
             }
@@ -1257,8 +1171,8 @@ class ImageCanvas {
         const xyz = this.ic.cam.model_at_distance([cx,cy], distance);
         const color = "#0ff";
         const wnp = new WasmNamedPoint(name, color);
-        this.ic.project.project.nps.add_pt(wnp);
-        this.ic.project.project.nps.set_model(name, xyz);
+        this.ic.nps.add_pt(wnp);
+        this.ic.nps.set_model(name, xyz);
         this.set_pms_to_cursor(name);
         this.refill_nps_pms();
         this.redraw_canvas();
@@ -1272,23 +1186,24 @@ class ImageCanvas {
 
     //mp derive_nps_location
     derive_nps_location(name) {
-        const xyz = this.ic.project.derive_nps_location(name);
+        const xyz = this.ic.derive_nps_location(name);
         if (xyz) {
-            this.ic.project.project.nps.set_model(name, xyz);
+            this.ic.nps.set_model(name, xyz);
             this.refill_nps_pms();
             this.redraw_canvas();
         }
     }
 
-    //mp derive_all_nps_location
-    derive_all_nps_location(name) {
-        for (const name in this.ic.project.project.nps.pts()) {
+    //mp derive_all_nps_locations
+    derive_all_nps_locations() {
+        for (const name of this.ic.nps.pts()) {
             this.derive_nps_location(name);
         }
     }
+
     //mp locate_all
     locate_all() {
-        this.ic.project.locate_all()
+        this.ic.locate_all()
         this.refill_camera_info();
         this.redraw_canvas();
     }
@@ -1315,15 +1230,10 @@ class Browser {
         link.addEventListener('click',
                               function(value) {
                                   const data = me.file_set.load_file(type, f);
-                                  this.href = `data:application/json;${data}`;
                                   this.href = "data:application/json," + encodeURIComponent(data)+"";
                               }
                              );
         link.href = f;
-        // const linkSource = `data:application/pdf;base64,${pdf}`;
-        // const fileName = "vct_illustration.pdf";
-        // downloadLink.href = linkSource;
-        // downloadLink.download = fileName;
         return link;
     }
 

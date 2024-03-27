@@ -185,11 +185,6 @@ impl WasmCameraInstance {
                 .borrow()
                 .get_pm_as_ray(&wpms.pms.borrow().mappings()[n], from_camera);
             Ok(WasmRay { ray })
-            /* WasmRay::new(
-                ray.start.as_ref(),
-                ray.direction.as_ref(),
-                Some(ray.tan_error),
-            )*/
         } else {
             Err("PM index out of range".into())
         }
@@ -656,6 +651,18 @@ impl WasmProject {
                 .borrow_mut()
                 .read_json(&self.project, camera_json, pms_json)
         }
+    }
+
+    //mp locate_all
+    pub fn locate_all(&self) {
+        self.project.locate_all();
+    }
+
+    //mp derive_nps_location
+    pub fn derive_nps_location(&self, name: &str) -> Option<Box<[f64]>> {
+        self.project
+            .derive_nps_location(name)
+            .map(|a| [a[0], a[1], a[2]].into())
     }
 
     //zz All done
