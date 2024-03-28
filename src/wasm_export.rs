@@ -357,6 +357,7 @@ pub struct WasmNamedPoint {
     name: String,
     color: String,
     model: [f64; 3],
+    error: f64,
 }
 
 //ip WasmNamedPoint
@@ -370,22 +371,37 @@ impl WasmNamedPoint {
         let _color: Color = color.try_into()?;
         let color = color.into();
         let model = [0.; 3];
-        Ok(Self { name, color, model })
+        let error = 0.0;
+        Ok(Self {
+            name,
+            color,
+            model,
+            error,
+        })
     }
 
     //mp name
+    #[wasm_bindgen(getter)]
     pub fn name(&self) -> JsValue {
         (&self.name).into()
     }
 
     //mp color
+    #[wasm_bindgen(getter)]
     pub fn color(&self) -> JsValue {
         (&self.color).into()
     }
 
     //mp model
+    #[wasm_bindgen(getter)]
     pub fn model(&self) -> Box<[f64]> {
         Box::new(self.model)
+    }
+
+    //mp error
+    #[wasm_bindgen(getter)]
+    pub fn error(&self) -> f64 {
+        self.error
     }
 }
 
@@ -435,7 +451,7 @@ impl WasmNamedPointSet {
         let color: Color = wnp.color.as_str().try_into()?;
         self.nps
             .borrow_mut()
-            .add_pt(&wnp.name, color, Some(wnp.model.into()));
+            .add_pt(&wnp.name, color, Some(wnp.model.into()), wnp.error);
         Ok(())
     }
 
@@ -443,10 +459,12 @@ impl WasmNamedPointSet {
     #[wasm_bindgen]
     pub fn get_pt(&mut self, name: &str) -> Option<WasmNamedPoint> {
         if let Some(np) = self.nps.borrow().get_pt(name) {
+            let (model, error) = np.model();
             let wnp = WasmNamedPoint {
                 name: name.into(),
                 color: np.color().as_string(),
-                model: np.model().into(),
+                model: model.into(),
+                error,
             };
             Some(wnp)
         } else {
@@ -466,9 +484,9 @@ impl WasmNamedPointSet {
     }
 
     //mp set_model
-    pub fn set_model(&self, name: &str, model: &[f64]) -> Result<(), String> {
+    pub fn set_model(&self, name: &str, model: &[f64], error: f64) -> Result<(), String> {
         if let Some(np) = self.nps.borrow().get_pt(name) {
-            np.set_model(Some(point3d(model)?));
+            np.set_model(Some((point3d(model)?, error)));
             Ok(())
         } else {
             Err("Could not find named point".into())
@@ -659,10 +677,11 @@ impl WasmProject {
     }
 
     //mp derive_nps_location
+    /// Returns [x,y,z,e]
     pub fn derive_nps_location(&self, name: &str) -> Option<Box<[f64]>> {
         self.project
             .derive_nps_location(name)
-            .map(|a| [a[0], a[1], a[2]].into())
+            .map(|(a, e)| [a[0], a[1], a[2], e].into())
     }
 
     //zz All done

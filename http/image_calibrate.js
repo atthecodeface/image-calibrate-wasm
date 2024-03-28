@@ -37,6 +37,11 @@ function parse_json(data) {
     }
 }
 
+//fp strcmp
+function strcmp(a, b) {
+    return (a<b) ? -1 : (0+(a>b));
+}
+
 //mp quaternion_x_vector
 function quaternion_x_vector(q, v, add=[0,0,0]) {
     const r = -q[3];
@@ -89,11 +94,14 @@ function html_add_ele(parent, type, classes) {
 //mp html_table
 function html_table(table_classes, headings, contents) {
     const table = document.createElement("table");
-    table.className = "browser_table "+table_classes;
+    table.className = "browser_table "+table_classes[0];
     var tr;
 
     if (headings) {
         tr = document.createElement("tr");
+        if (table_classes[1]) {
+            tr.className = table_classes[1];
+        }
         let i = 0;
         for (const h of headings) {
             const th = document.createElement("th");
@@ -400,6 +408,7 @@ class Ic {
     }
 
     //mp derive_nps_location
+    /// Returns the point and the worst distance
     derive_nps_location(name) {
         return this.project.derive_nps_location(name);
     }
@@ -413,10 +422,10 @@ class Ic {
         const cw = 2;
 
         for (const name of this.nps.pts()) {
-            const p = this.nps.get_pt(name);
-            const xyz = p.model();
+            const np = this.nps.get_pt(name);
+            const xyz = np.model;
             const pxy = zw.scr_xy_of_img_xy(this.cam.map_model(xyz));
-            ctx.fillStyle = p.color();
+            ctx.fillStyle = np.color;
             ctx.fillRect(pxy[0]-cl, pxy[1]-cw, cl*2, cw*2);
             ctx.fillRect(pxy[0]-cw, pxy[1]-cl, cw*2, cl*2);
         }
@@ -433,10 +442,10 @@ class Ic {
         let num_mappings = this.pms.length;
         for (let i = 0; i < num_mappings; i++) { 
             const n = this.pms.get_name(i);
-            const p = this.nps.get_pt(n);
+            const np = this.nps.get_pt(n);
             const xy = this.pms.get_xy(i);
             const sxy = zw.scr_xy_of_img_xy(xy);
-            ctx.strokeStyle = p.color();
+            ctx.strokeStyle = np.color;
             ctx.beginPath();
             ctx.arc(sxy[0], sxy[1], cl, 0, Math.PI * 2, true);
             ctx.stroke();
@@ -448,11 +457,11 @@ class Ic {
         if (!this.nps || !name) {
             return;
         }
-        const p = this.nps.get_pt(name);
-        if (!p) {
+        const np = this.nps.get_pt(name);
+        if (!np) {
             return;
         }
-        ctx.strokeStyle = p.color();
+        ctx.strokeStyle = np.color;
         ctx.lineWidth = 1;
         ctx.beginPath();
         for (let i=0; i<this.ncips(); i++) {
@@ -822,15 +831,22 @@ class ImageCanvas {
             this.set_animating(true);
             if (cursor_info) {
                 html_clear(cursor_info);
+                const me = this;
+
                 const input = html_add_ele(cursor_info, "input");
                 input.type = "button";
                 input.value = `Cursor at ${html_position(cxy,0)}`;
-                const me = this;
                 input.addEventListener('click', function(value) {me.focus_on_src(cxy);} );
+
+                const clear = html_add_ele(cursor_info, "input");
+                clear.type = "button";
+                clear.value = "Clear";
+                clear.addEventListener('click', function(value) {me.cursor_add();} );
             }
         } else {
             this.cursor = null;
             cursor_info.innerText = `No cursor`;
+            this.redraw_canvas();
         }
     }
 
@@ -1021,46 +1037,128 @@ class ImageCanvas {
         this.redraw_canvas();
     }
 
+    //mp nps_sort_by
+    nps_sort_by(v) {
+        this.nps_sort = v;
+        this.refill_nps_pms();
+    }
+
     //mp refill_nps_pms
     refill_nps_pms() {
         const nps = document.getElementById("nps_contents");
         if (nps) {
             html_clear(nps);
 
-            const table_classes = "";
-            const headings = ["Rays", "Name", "Color", "Location", "Expected at", "Focus", "Mapped to", "Focus", "Delete"];
+            const form = html_add_ele(nps, "form", "");
+            form.id = "nps_form";
+            const clear_ray = "<input type='button' value='Clear ray' onclick='window.image_canvas.rays_of_nps()'/>";
+            const s_alpha = "<input type='radio' value='alpha' name='sort' id='nps_alpha' oninput='window.image_canvas.nps_sort_by(this.value)'/><label for='nps_alpha'>Alphabetical</label>";
+            const s_cursor = "<input type='radio' value='cursor' name='sort' id='nps_cursor' oninput='window.image_canvas.nps_sort_by(this.value)'/><label for='nps_cursor'>Cursor</label>";
+            const s_x = "<input type='radio' value='x' name='sort' id='nps_x' oninput='window.image_canvas.nps_sort_by(this.value)'/><label for='nps_x'>X</label>";
+            const s_y = "<input type='radio' value='y' name='sort' id='nps_y' oninput='window.image_canvas.nps_sort_by(this.value)'/><label for='nps_y'>Y</label>";
+            const s_err = "<input type='radio' value='err' name='sort' id='nps_err' oninput='window.image_canvas.nps_sort_by(this.value)'/><label for='nps_err'>Error</label>";
+            const div = html_add_ele(form, "div", "");
+            div.innerHTML = clear_ray + s_alpha + s_cursor + s_x + s_y + s_err;
+            
+            const table_classes = ["", "sticky_heading"];
+            const headings = ["Rays", "Name", "Color", "Location", "R Err", "Expected at", "Focus", "Mapped to", "Focus", "Delete"];
             const contents = [];
             const pms = this.ic.pms;
             const cam = this.ic.cam;
 
-            for (const np_name of this.ic.nps.pts().sort()) {
+            form.elements["sort"].value = this.nps_sort;
+
+            let cx = 3360;
+            let cy = 2240;
+            if (this.cursor) {
+                cx = this.cursor[0];
+                cy = this.cursor[1];
+            }
+            const nps_data = [];
+            for (const np_name of this.ic.nps.pts()) {
                 const np = this.ic.nps.get_pt(np_name);
-                const np_style = `style='color: ${np.color()};'}`;
-                const np_img = cam.map_model(np.model());
-                const np_x = np_img[0];
-                const np_y = np_img[1];
-                const rays = `<input type='radio' name='nps' id='np__${np_name}' oninput='window.image_canvas.rays_of_nps("${np_name}")'/><label for='np__${np_name}'  ${np_style}>&#x263C;</label> `;
-                const expected_at = `${html_position([np_x-3360, np_y-2240],0)}`;
-                const focus_np = `<input type='button' value='&#x271A;' ${np_style} onclick='window.image_canvas.focus_on_src([${np_x},${np_y}])'>`;
-                let mapped_to = `<input type='button' value="Set to cursor" onclick='window.image_canvas.set_pms_to_cursor("${np_name}")'>`;
-                let focus_pm = "";
-                let delete_pms = "";
+                const np_pxy = cam.map_model(np.model);
+                const dx = np_pxy[0]-cx;
+                const dy = np_pxy[1]-cy;
+                const d2 = dx*dx+dy*dy;
+                let data = {"name": np_name,
+                            "color" : np.color,
+                            "model": np.model,
+                            "error" :  np.error,
+                            "np_pxy": np_pxy,
+                            "map_pxye": null,
+                            "d2": d2,
+                           };
+
+                data.name_upp = np_name.toUpperCase();
                 const pms_n = pms.mapping_of_name(np_name);
                 if (pms_n !== undefined) {
-                    mapped_to = pms.get_xy_err(pms_n);
-                    let x = mapped_to[0];
-                    let y = mapped_to[1];
-                    let e = mapped_to[2];
+                    data.map_pxye = pms.get_xy_err(pms_n);
+                }
+                nps_data.push(data);
+            }
+            
+            switch (this.nps_sort) {
+            case "x":
+                nps_data.sort(function (a,b) {return a.np_pxy[0]-b.np_pxy[0]});
+                break;
+            case "y":
+                nps_data.sort(function (a,b) {return a.np_pxy[1]-b.np_pxy[1]});
+                break;
+            case "err":
+                nps_data.sort(function (a,b) {return a.error-b.error});
+                break;
+            case "pxy_err":
+                nps_data.sort(function (a,b) {
+                    if (a.map_pxye !== null) {
+                        if (b.map_pxye !== null) {
+                            return a.map_pxye[2]-b.map_pxye[2];
+                        } else {
+                            return -1;
+                        }
+                    } else if (b.map_pxye !== null) {
+                        return 1;
+                    } else {
+                        return (a.name_upp<b.name_upp)? -1 : (0+(a.name_upp>b.name_upp));
+                    }
+                });
+                break;
+            case "cursor": 
+                nps_data.sort(function (a,b) {return a.d2-b.d2});
+                break;
+            default:                  // alphabetical
+                nps_data.sort(function (a,b) {return (a.name_upp<b.name_upp)? -1 : (0+(a.name_upp>b.name_upp))});
+                break;
+            }
+            for (const np of nps_data) {
+                const np_style = `style='color: ${np.color};'}`;
+                const np_x = np.np_pxy[0];
+                const np_y = np.np_pxy[1];
+
+                const np_id = "np__" + np.name;
+                const rays = `<input type='radio' value='${np.name}' name='nps' id='${np_id}' oninput='window.image_canvas.rays_of_nps(this.value)'/><label for='${np_id}'  ${np_style}>&#x263C;</label> `;
+                const r_err = `${np.error.toFixed(3)}`;
+                const expected_at = `${html_position([np_x-3360, np_y-2240],0)}`;
+                const focus_np = `<input type='button' value='&#x271A;' ${np_style} onclick='window.image_canvas.focus_on_src([${np_x},${np_y}])'>`;
+                let mapped_to = `<input type='button' value="Set to cursor" onclick='window.image_canvas.set_pms_to_cursor("${np.name}")'>`;
+                let focus_pm = "";
+                let delete_pms = "";
+                if (np.map_pxye) {
+                    let x = np.map_pxye[0];
+                    let y = np.map_pxye[1];
+                    let e = np.map_pxye[2];
                     focus_pm = `<input type='button' value='&xcirc;' ${np_style} onclick='window.image_canvas.focus_on_src([${x},${y}])'>`;
                     mapped_to = `(${html_position([x-3360,y-2240])}  (err ${e})`;
-                    delete_pms =`<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.delete_pms("${np_name}")'>`;
-                        
+                    delete_pms =`<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.delete_pms("${np.name}")'>`;
                 }
-                let location = `<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.derive_nps_location("${np_name}")'>&nbsp;${html_position(np.model())}`;
-                contents.push([rays, np.name(), np.color(), location, expected_at, focus_np, mapped_to, focus_pm, delete_pms]);
+                let location = `<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.derive_nps_location("${np.name}")'>&nbsp;${html_position(np.model)}`;
+                contents.push([rays, np.name, np.color, location, r_err, expected_at, focus_np, mapped_to, focus_pm, delete_pms]);
             }
             const table = html_table(table_classes, headings, contents);
-            nps.append(table);
+            form.append(table);
+            if (this.ic.trace_ray_name) {
+                form.elements["nps"].value = this.ic.trace_ray_name;
+            }
         }
     }    
 
@@ -1095,11 +1193,14 @@ class ImageCanvas {
             const direction = html_position(quaternion_x_vector(this.ic.cam.orientation, [0,0,-focus_distance]));
             const up = html_position(quaternion_x_vector(this.ic.cam.orientation, [0,-10,0]));
             
-            const table_classes = "";
+            const table_classes = ["", "sticky_heading"];
             const headings = ["Parameter", "Value"];
-            let focus_at = `<input class="widget_button" type="button" value="-" onclick="window.image_canvas.set_focus_distance(null,-1);"/>`
+            let focus_at = "";
+            focus_at += `<input class="widget_button" type="button" style="font-weight: bold;" value="-" onclick="window.image_canvas.set_focus_distance(null,-10);"/>`;
+            focus_at += `<input class="widget_button" type="button" value="-" onclick="window.image_canvas.set_focus_distance(null,-1);"/>`
             focus_at += `&nbsp;${focus_distance} mm&nbsp;`;
             focus_at += `<input class="widget_button" type="button" value="+" onclick="window.image_canvas.set_focus_distance(null,1);"/>`;
+            focus_at += `<input class="widget_button" type="button" style="font-weight: bold;" value="+" onclick="window.image_canvas.set_focus_distance(null,10);"/>`;
             const contents = [
                 ["Body", this.ic.cam.body],
                 ["Lens", this.ic.cam.lens],
@@ -1120,6 +1221,11 @@ class ImageCanvas {
         this.ic.select_cip_of_project(n);
         this.image.src = this.ic.img_src;
 
+        if (this.ic.trace_ray_name) {
+            const np = this.ic.nps.get_pt(this.ic.trace_ray_name);
+            const np_pxy = this.ic.cam.map_model(np.model);
+            this.focus_on_src(np_pxy);
+        }
         this.refill_camera_info();
         this.refill_nps_pms();
         this.redraw_canvas();
@@ -1172,7 +1278,7 @@ class ImageCanvas {
         const color = "#0ff";
         const wnp = new WasmNamedPoint(name, color);
         this.ic.nps.add_pt(wnp);
-        this.ic.nps.set_model(name, xyz);
+        this.ic.nps.set_model(name, xyz, 10.0);
         this.set_pms_to_cursor(name);
         this.refill_nps_pms();
         this.redraw_canvas();
@@ -1181,14 +1287,28 @@ class ImageCanvas {
     //mp rays_of_nps
     rays_of_nps(name) {
         this.ic.trace_ray_name = name;
+        const nps_form = document.getElementById("nps_form");
+        if (nps_form) {
+            console.log(nps_form, nps_form.elements["nps"].value,name);
+            if (name) {
+                nps_form.elements["nps"].value = name;
+            } else {
+                nps_form.elements["nps"].value = "banana";
+            }
+        }
         this.redraw_canvas();
     }
 
     //mp derive_nps_location
     derive_nps_location(name) {
-        const xyz = this.ic.derive_nps_location(name);
-        if (xyz) {
-            this.ic.nps.set_model(name, xyz);
+        let current_e = this.ic.nps.get_pt(name).error;
+        if (current_e < 0.01) {
+            return;
+        }
+        const xyz_e = this.ic.derive_nps_location(name);
+        if (xyz_e) {
+            const xyz = [xyz_e[0], xyz_e[1], xyz_e[2]];
+            this.ic.nps.set_model(name, xyz, xyz_e[3]);
             this.refill_nps_pms();
             this.redraw_canvas();
         }
