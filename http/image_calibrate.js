@@ -6,9 +6,10 @@
 
 //a Imports
 import init, {WasmProject, WasmCip, WasmCameraDatabase, WasmCameraInstance, WasmNamedPoint, WasmNamedPointSet, WasmPointMappingSet, WasmRay} from "../pkg/image_calibrate_wasm.js";
-import * as utils from "./utils.js";
-import {Log} from "./log.js";
 import {Directory, FileSet} from "./files.js";
+import {Log} from "./log.js";
+import * as html from "./html.js";
+import * as utils from "./utils.js";
 import {ZoomedWindow} from "./zoomed_window.js";
 
 //a Useful functions
@@ -28,91 +29,6 @@ function quaternion_x_vector(q, v, add=[0,0,0]) {
         + 2 * (k * j + r * i) * v[1]
         + 2 * (k * i - r * j) * v[0];
     return [x+add[0], y+add[1], z+add[2]];
-}
-
-//mp html_position
-function html_position(c, dp=2) {
-    if (c.length == 3) {
-        c = [c[0].toFixed(dp),
-             c[1].toFixed(dp),
-             c[2].toFixed(dp),
-            ];
-        return `${c[0]}, ${c[1]}, ${c[2]}`;
-    } else {
-        c = [c[0].toFixed(dp),
-             c[1].toFixed(dp),
-            ];
-        return `(${c[0]}, ${c[1]})`;
-    }
-}
-
-//mp html_clear
-function html_clear(id) {
-    while (id.firstChild) {
-        id.removeChild(id.firstChild);
-    }
-}
-
-//mp html_add_ele
-function html_add_ele(parent, type, classes) {
-    const ele = document.createElement(type);
-    ele.classes = classes;
-    parent.append(ele);
-    return ele;
-}
-
-//mp html_table
-function html_table(table_classes, headings, contents) {
-    const table = document.createElement("table");
-    table.className = "browser_table "+table_classes[0];
-    var tr;
-
-    if (headings) {
-        tr = document.createElement("tr");
-        if (table_classes[1]) {
-            tr.className = table_classes[1];
-        }
-        let i = 0;
-        for (const h of headings) {
-            const th = document.createElement("th");
-            th.innerText = h;
-            th.className = "th"+i;
-            i += 1;
-            tr.appendChild(th);
-        }
-        table.appendChild(tr);
-    }
-
-    for (const c of contents) {
-        tr = document.createElement("tr");
-        for (const d of c) {
-            const td = document.createElement("td");
-            td.innerHTML = d;
-            tr.appendChild(td);
-        }
-        table.appendChild(tr);
-    }
-    return table;
-}
-
-//mp html_vtable
-function html_vtable(table_classes, contents) {
-    const table = document.createElement("table");
-    table.className = "browser_table "+table_classes;
-    var tr;
-
-    for (const c of contents) {
-        tr = document.createElement("tr");
-        let td_or_th = "th";
-        for (const d of c) {
-            const td = document.createElement(td_or_th);
-            td.innerHTML = d;
-            tr.appendChild(td);
-            td_or_th = "td";
-        }
-        table.appendChild(tr);
-    }
-    return table;
 }
 
 //mp find_data_type
@@ -481,15 +397,15 @@ class ImageCanvas {
             this.cursor = [cxy[0], cxy[1], r, 0, null];
             this.set_animating(true);
             if (cursor_info) {
-                html_clear(cursor_info);
+                html.clear(cursor_info);
                 const me = this;
 
-                const input = html_add_ele(cursor_info, "input");
+                const input = html.add_ele(cursor_info, "input");
                 input.type = "button";
-                input.value = `Cursor at ${html_position(cxy,0)}`;
+                input.value = `Cursor at ${html.position(cxy,0)}`;
                 input.addEventListener('click', function(value) {me.focus_on_src(cxy);} );
 
-                const clear = html_add_ele(cursor_info, "input");
+                const clear = html.add_ele(cursor_info, "input");
                 clear.type = "button";
                 clear.value = "Clear";
                 clear.addEventListener('click', function(value) {me.cursor_add();} );
@@ -698,9 +614,9 @@ class ImageCanvas {
     refill_nps_pms() {
         const nps = document.getElementById("nps_contents");
         if (nps) {
-            html_clear(nps);
+            html.clear(nps);
 
-            const form = html_add_ele(nps, "form", "");
+            const form = html.add_ele(nps, "form", "");
             form.id = "nps_form";
             const clear_ray = "<input type='button' value='Clear ray' onclick='window.image_canvas.rays_of_nps()'/>";
             const s_alpha = "<input type='radio' value='alpha' name='sort' id='nps_alpha' oninput='window.image_canvas.nps_sort_by(this.value)'/><label for='nps_alpha'>Alphabetical</label>";
@@ -708,7 +624,7 @@ class ImageCanvas {
             const s_x = "<input type='radio' value='x' name='sort' id='nps_x' oninput='window.image_canvas.nps_sort_by(this.value)'/><label for='nps_x'>X</label>";
             const s_y = "<input type='radio' value='y' name='sort' id='nps_y' oninput='window.image_canvas.nps_sort_by(this.value)'/><label for='nps_y'>Y</label>";
             const s_err = "<input type='radio' value='err' name='sort' id='nps_err' oninput='window.image_canvas.nps_sort_by(this.value)'/><label for='nps_err'>Error</label>";
-            const div = html_add_ele(form, "div", "");
+            const div = html.add_ele(form, "div", "");
             div.innerHTML = clear_ray + s_alpha + s_cursor + s_x + s_y + s_err;
             
             const table_classes = ["", "sticky_heading"];
@@ -789,7 +705,7 @@ class ImageCanvas {
                 const np_id = "np__" + np.name;
                 const rays = `<input type='radio' value='${np.name}' name='nps' id='${np_id}' oninput='window.image_canvas.rays_of_nps(this.value)'/><label for='${np_id}'  ${np_style}>&#x263C;</label> `;
                 const r_err = `${np.error.toFixed(3)}`;
-                const expected_at = `${html_position([np_x-3360, np_y-2240],0)}`;
+                const expected_at = `${html.position([np_x-3360, np_y-2240],0)}`;
                 const focus_np = `<input type='button' value='&#x271A;' ${np_style} onclick='window.image_canvas.focus_on_src([${np_x},${np_y}])'>`;
                 let mapped_to = `<input type='button' value="Set to cursor" onclick='window.image_canvas.set_pms_to_cursor("${np.name}")'>`;
                 let focus_pm = "";
@@ -799,13 +715,13 @@ class ImageCanvas {
                     let y = np.map_pxye[1];
                     let e = np.map_pxye[2];
                     focus_pm = `<input type='button' value='&xcirc;' ${np_style} onclick='window.image_canvas.focus_on_src([${x},${y}])'>`;
-                    mapped_to = `(${html_position([x-3360,y-2240])}  (err ${e})`;
+                    mapped_to = `(${html.position([x-3360,y-2240])}  (err ${e})`;
                     delete_pms =`<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.delete_pms("${np.name}")'>`;
                 }
-                let location = `<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.derive_nps_location("${np.name}")'>&nbsp;${html_position(np.model)}`;
+                let location = `<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.derive_nps_location("${np.name}")'>&nbsp;${html.position(np.model)}`;
                 contents.push([rays, np.name, np.color, location, r_err, expected_at, focus_np, mapped_to, focus_pm, delete_pms]);
             }
-            const table = html_table(table_classes, headings, contents);
+            const table = html.table(table_classes, headings, contents);
             form.append(table);
             if (this.ic.trace_ray_name) {
                 form.elements["nps"].value = this.ic.trace_ray_name;
@@ -817,12 +733,12 @@ class ImageCanvas {
     refill_camera_info() {
         const camera_info = document.getElementById("camera_info");
         if (camera_info) {
-            html_clear(camera_info);
+            html.clear(camera_info);
 
             const cip = this.ic.cip(this.ic.cip_of_project);
             const n_cip = this.ic.ncips();
             const cip_num = `${this.ic.cip_of_project} of ${n_cip}`;
-            const itable = html_vtable("", 
+            const itable = html.vtable("", 
                                        [ ["CIP", cip_num],
                                         ["Camera", cip.cam_file],
                                         ["Image", cip.img],
@@ -830,7 +746,7 @@ class ImageCanvas {
                                       ] );
             camera_info.append(itable);
 
-            const location = html_position(this.ic.cam.location);
+            const location = html.position(this.ic.cam.location);
 
             var orientation = this.ic.cam.orientation;
             orientation = [-orientation[0].toFixed(2),
@@ -840,9 +756,9 @@ class ImageCanvas {
                           ];
             orientation = `${orientation[0]}, ${orientation[1]}, ${orientation[2]}, ${orientation[3]}`;
             const focus_distance = this.ic.cam.focus_distance;
-            const focused_on = html_position(quaternion_x_vector(this.ic.cam.orientation, [0,0,-focus_distance], this.ic.cam.location));
-            const direction = html_position(quaternion_x_vector(this.ic.cam.orientation, [0,0,-focus_distance]));
-            const up = html_position(quaternion_x_vector(this.ic.cam.orientation, [0,-10,0]));
+            const focused_on = html.position(quaternion_x_vector(this.ic.cam.orientation, [0,0,-focus_distance], this.ic.cam.location));
+            const direction = html.position(quaternion_x_vector(this.ic.cam.orientation, [0,0,-focus_distance]));
+            const up = html.position(quaternion_x_vector(this.ic.cam.orientation, [0,-10,0]));
             
             const table_classes = ["", "sticky_heading"];
             const headings = ["Parameter", "Value"];
@@ -862,7 +778,7 @@ class ImageCanvas {
                 ["Direction", direction],
                 ["Up", up],
             ];
-            const table = html_table(table_classes, headings, contents);
+            const table = html.table(table_classes, headings, contents);
             camera_info.append(table);
         }
     }    
