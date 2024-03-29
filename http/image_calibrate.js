@@ -1,47 +1,17 @@
 //a To do
 // recolor named point (based on camera, need to get image pixel value - probably by creating a canvas?)
 // rename named point
-// project in Rust
-// error distance in named point
+// add normal to named point
 // circular luminance/chrominance for 1mm, 3.161mm, 10mm or 1mm, 2.16mmm, 4.66mm, 10m...
-// Download project as a whole
-// save whole project
 
 //a Imports
 import init, {WasmProject, WasmCip, WasmCameraDatabase, WasmCameraInstance, WasmNamedPoint, WasmNamedPointSet, WasmPointMappingSet, WasmRay} from "../pkg/image_calibrate_wasm.js";
+import * as utils from "./utils.js";
+import {Log} from "./log.js";
+import {Directory, FileSet} from "./files.js";
+import {ZoomedWindow} from "./zoomed_window.js";
+
 //a Useful functions
-//fp is_array
-function is_array(obj) {
-    return Object.prototype.toString.call(obj) === "[object Array]";
-}
-
-//fp is_string
-function is_string(obj) {
-    return typeof obj === "string";
-}
-
-//fp is_float
-function is_float(obj) {
-    return typeof obj === "number";
-}
-
-//fp parse_json
-function parse_json(data) {
-    const regex = new RegExp("//[^\n]*", "g");
-    data = data.replaceAll(regex, "");
-    try {
-        const obj = JSON.parse(data);
-        return obj;
-    } catch (e) {
-        return;
-    }
-}
-
-//fp strcmp
-function strcmp(a, b) {
-    return (a<b) ? -1 : (0+(a>b));
-}
-
 //mp quaternion_x_vector
 function quaternion_x_vector(q, v, add=[0,0,0]) {
     const r = -q[3];
@@ -147,7 +117,7 @@ function html_vtable(table_classes, contents) {
 
 //mp find_data_type
 function find_data_type(data) {
-    const obj = parse_json(data);
+    const obj = utils.parse_json(data);
     if (!obj) {
         return;
     }
@@ -174,175 +144,6 @@ function find_data_type(data) {
     return;
 }
     
-
-//mp round_to_multiple
-function round_to_multiple(x, m, to=0 ) {
-    if (to==0) {
-        return m * Math.round(x/m);
-    } else if (to<0) {
-        return m * Math.floor(x/m);
-    } else {
-        return m * Math.ceil(x/m);
-    }
-}
-
-//a Log
-class Log {
-    //fp constructor
-    constructor(div) {
-        this.log = [];
-        this.div = div;
-    }
-
-    //mp set_div
-    set_div(div) {
-        this.div = div;
-    }
-
-    //mp reset_log
-    reset_log() {
-        this.log = [];
-        this.fill_div();
-    }
-    
-    //ap is_empty
-    is_empty() {
-        return this.log.length==0;
-    }
-    
-    //ap log
-    log() {
-        return this.log;
-    }
-    
-    //mp add_log
-    add_log(severity, src, reason, error) {
-        this.log.push({ "severity":severity, "src":src, "reason":reason, "error":error});
-        this.fill_div();
-    }
-
-    //mp fill_div
-    fill_div() {
-        if (!this.div) {
-            return;
-        }
-        let html = "";
-        for (const e of this.log) {
-            html += `${e.severity} : ${e.src} : ${e.reason} : ${e.error} : <br/>`;
-        }
-        this.div.innerHTML = html;
-    }
-    
-}
-
-//a Directory
-class Directory {
-    //fp constructor
-    constructor() {
-        this.files = {};
-    }
-
-    //mp contains_file
-    contains_file(suffix, root) {
-        if (!this.files[suffix]) {
-            return false;
-        }
-        if (!this.files[suffix][root]) {
-            return false;
-        }
-        return true;
-    }
-
-    //mp add_file
-    add_file(suffix, root) {
-        if (!this.files[suffix]) {
-            this.files[suffix] = {};
-        }
-        this.files[suffix][root] = true;
-    }
-
-    //mp delete_file
-    delete_file(suffix, root) {
-        if (!this.files[suffix]) {
-            return;
-        }
-        if (!this.files[suffix][root]) {
-            return;
-        }
-        delete(this.files[suffix][root]);
-        if (this.files[suffix].length == 0) {
-            delete(this.files[suffix]);
-        }
-    }
-
-    //mp files_of_type
-    files_of_type(suffix) {
-        if (!this.files[suffix]) {
-            return [];
-        }
-        return Object.keys(this.files[suffix]);
-    }
-}
-
-//a FileSet
-class FileSet {
-
-    //fp constructor
-    constructor(storage, prefix) {
-        this.storage = storage;
-        this.prefix = prefix;
-        this.load_dir();
-    }
-
-    //mp split_filename
-    split_filename(filename) {
-        const suffix = filename.split(".").pop();
-        if (suffix) {
-            const root = filename.slice(0, -suffix.length-1);
-            return [suffix, root];
-        } else {
-            return null;
-        }
-    }
-    
-    //mp load_dir
-    load_dir() {
-        this.directory = new Directory();
-        const n = this.storage.length;
-        const pl = this.prefix.length;
-        for (let i = 0; i < n; i++) {
-            let k = this.storage.key(i);
-            if (k.startsWith(this.prefix)) {
-                const f = k.slice(pl);
-                const s_r = this.split_filename(f);
-                if (s_r) {
-                    this.directory.add_file(s_r[0], s_r[1]);
-                }
-            }
-        }
-    }
-
-    //mp load_file
-    load_file(suffix, root) {
-        let f = this.prefix + root + "." + suffix;
-        return this.storage.getItem(f);
-    }
-
-    //mp save_file
-    save_file(suffix, root, data) {
-        let f = this.prefix + root + "." + suffix;
-        this.storage.setItem(f, data);
-        this.directory.add_file(suffix, root);
-    }
-
-    //mp dir
-    dir() {
-        return this.directory;
-    }
-
-    //zz All done
-}
-
 //a Ic
 class Ic {
 
@@ -413,240 +214,8 @@ class Ic {
         return this.project.derive_nps_location(name);
     }
 
-    //mp redraw_nps
-    redraw_nps(ctx, zw) {
-        if (!this.nps) {
-            return;
-        }
-        const cl = 6;
-        const cw = 2;
-
-        for (const name of this.nps.pts()) {
-            const np = this.nps.get_pt(name);
-            const xyz = np.model;
-            const pxy = zw.scr_xy_of_img_xy(this.cam.map_model(xyz));
-            ctx.fillStyle = np.color;
-            ctx.fillRect(pxy[0]-cl, pxy[1]-cw, cl*2, cw*2);
-            ctx.fillRect(pxy[0]-cw, pxy[1]-cl, cw*2, cl*2);
-        }
-    }
-    
-    //mp redraw_pms
-    redraw_pms(ctx, zw) {
-        if (!this.pms) {
-            return;
-        }
-        const cl = 6;
-        const cw = 2;
-        
-        let num_mappings = this.pms.length;
-        for (let i = 0; i < num_mappings; i++) { 
-            const n = this.pms.get_name(i);
-            const np = this.nps.get_pt(n);
-            const xy = this.pms.get_xy(i);
-            const sxy = zw.scr_xy_of_img_xy(xy);
-            ctx.strokeStyle = np.color;
-            ctx.beginPath();
-            ctx.arc(sxy[0], sxy[1], cl, 0, Math.PI * 2, true);
-            ctx.stroke();
-        }
-    }
-
-    //mp redraw_rays
-    redraw_rays(ctx, name, zw) {
-        if (!this.nps || !name) {
-            return;
-        }
-        const np = this.nps.get_pt(name);
-        if (!np) {
-            return;
-        }
-        ctx.strokeStyle = np.color;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (let i=0; i<this.ncips(); i++) {
-            if (i == this.cip_of_project) {
-                continue;
-            }
-            const cip = this.cip(i);
-            const mapping = cip.pms.mapping_of_name(name);
-            if (!mapping) {
-                continue;
-            }
-            const ray = cip.camera.get_pm_as_ray(cip.pms, mapping, true);
-            const focus_distance = cip.camera.focus_distance;
-            for (let k=0; k<100; k++) {
-                const xyz = ray.model_at_distance((k+50)*focus_distance/100);
-                const pxy = zw.scr_xy_of_img_xy(this.cam.map_model(xyz));
-                if (k==0) {
-                    ctx.moveTo(pxy[0], pxy[1]);
-                } else {
-                    ctx.lineTo(pxy[0], pxy[1]);
-                }
-            }
-        }                    
-        ctx.stroke();
-    }
-
-    //mp redraw_canvas
-    redraw_canvas(canvas, zw) {
-        const ctx = canvas.getContext("2d");
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        this.redraw_nps(ctx, zw);
-        this.redraw_pms(ctx, zw);
-        this.redraw_rays(ctx, this.trace_ray_name, zw);
-    }
-
     //zz All done
 }
-
-//a ZoomedWindow
-// This has an image that is WxH, and that is zoomed and panned to make
-// it visible on the screen
-//
-// The zoomed image has size Z.w x Z.h
-//
-// The screen is a window into the zoomed image of size w x h
-// (so one zoom pixel is the same size as one screen pixel) at a
-// top-left offset of zoom_scr_ofs
-//
-// The zoom can scale from 1 (as the zoomed image is always at least
-// the same width as the screen) up to 10 screen/zoomed pixels per
-// image pixel (if max_zoom_px_per_img_px is 10)
-//
-//
-class ZoomedWindow {
-
-    //fp constructor
-    constructor(scr_wh) {
-        this.min_zoom = 1.0;
-        this.max_zoom = 1.0;
-        this.zoom = 1.0;
-        this.img_wh = [0, 0];
-        this.scr_wh = [scr_wh[0], scr_wh[1]];
-        this.zoom_wh = [scr_wh[0], scr_wh[1]];
-        this.zoom_scr_ofs = [0,0];
-        this.max_zoom_px_per_img_px = 10;
-        this.zoom_px_of_img_px = 1.0;
-    }
-
-    //ap get_zoom
-    get_zoom() {
-        return this.zoom;
-    }
-
-    //ap get_scr_wh
-    get_scr_wh() {
-        return this.scr_wh;
-    }
-
-    //ap get_img_cxy
-    get_img_cxy() {
-        return [this.img_wh[0]/2, this.img_wh[1]/2];
-    }
-    //mp set_img
-    set_img(w, h) {
-        this.img_wh = [w,h];
-        this.recalculate_zoom();
-    }
-
-    //mp set_zoom_scr
-    set_zoom_scr(lx,ty) {
-        this.zoom_scr_ofs[0] = lx;
-        this.zoom_scr_ofs[1] = ty;
-    }
-
-    //mp recalculate_zoom
-    // Set the zoom to a specific factor
-    //
-    // Returns the scale factor from the current zoom to the actual new zoom
-    recalculate_zoom() {
-        this.min_zoom = 1.0;
-        this.max_zoom = 1.0;
-        if (this.img_wh[0] > 0) {
-            this.max_zoom = this.img_wh[0]*this.max_zoom_px_per_img_px / this.scr_wh[0];
-        }
-        this.zoom_set(this.zoom);
-    }
-            
-    //mp zoom_set
-    // Set the zoom to a specific factor
-    //
-    // Returns the scale factor from the current zoom to the actual new zoom
-    //
-    // If focus_xy is provided it is in screen coordinates
-    // (i.e. zoomed pixels relative to the top-left); if not it is
-    // deemed to be the centre of the current window (i.e. scr_wh[]/2)
-    zoom_set(zoom, focus_xy) {
-        if (zoom > this.max_zoom) { zoom = this.max_zoom; }
-        if (zoom < this.min_zoom) { zoom = this.min_zoom; }
-
-        const rescale_factor = zoom / this.zoom;
-        this.zoom = zoom;
-        this.zoom_wh[0] = this.zoom * this.scr_wh[0];
-        this.zoom_wh[1] = this.zoom * this.scr_wh[1];
-        this.zoom_px_of_img_px = 1.0;
-        if (this.img_wh[0] > 0) {
-            this.zoom_px_of_img_px = this.zoom_wh[0] / this.img_wh[0];
-        }
-
-        if (!focus_xy) {
-            focus_xy = [ this.scr_wh[0]/2,
-                         this.scr_wh[1]/2
-                       ];
-        }
-        this.zoom_scr_ofs[0] = this.zoom_scr_ofs[0]*rescale_factor + (rescale_factor-1)*focus_xy[0];
-        this.zoom_scr_ofs[1] = this.zoom_scr_ofs[1]*rescale_factor + (rescale_factor-1)*focus_xy[1];
-        return rescale_factor;
-    }
-
-    //mp img_cxy
-    img_cxy() {
-        return [this.img_wh[0]/2, this.img_wh[1]/2];
-    }
-
-    //mp scr_xy_of_img_xy
-    // Get a screen XY of an image XY
-    //
-    // Map to the zoom space and account for the top-left of the screen window on the zoom area
-    scr_xy_of_img_xy(img_xy) {
-        return [img_xy[0] * this.zoom_px_of_img_px - this.zoom_scr_ofs[0],
-                img_xy[1] * this.zoom_px_of_img_px - this.zoom_scr_ofs[1]
-               ];
-    }
-
-    //mp img_xy_of_scr_xy
-    // Get an image XY of a screen XY
-    //
-    // Map from the zoom space and account for the top-left of the screen window on the zoom area
-    img_xy_of_scr_xy(scr_xy) {
-        return [(scr_xy[0] + this.zoom_scr_ofs[0]) / this.zoom_px_of_img_px,
-                (scr_xy[1] + this.zoom_scr_ofs[1]) / this.zoom_px_of_img_px
-               ];
-    }
-
-    //mp img_bounds
-    img_bounds() {
-        const img_cxy = this.img_cxy();
-        const img_lx = this.zoom_scr_ofs[0] / this.zoom_px_of_img_px - img_cxy[0];
-        const img_ty = this.zoom_scr_ofs[1] / this.zoom_px_of_img_px - img_cxy[1];
-        const img_rx = (this.zoom_scr_ofs[0] + this.zoom_wh[0]) / this.zoom_px_of_img_px - img_cxy[0];
-        const img_by = (this.zoom_scr_ofs[1] + this.zoom_wh[1]) / this.zoom_px_of_img_px - img_cxy[1];
-        return [ img_lx, img_ty, img_rx, img_by];
-    }
-
-    //mp scr_focus_on_img_xy For a given image XY, set the scr offset
-    // so that the image XY is in the center of the screen (if
-    // possible)
-    scr_focus_on_xy(img_xy) {
-        const scr_lx = img_xy[0] * this.zoom_px_of_img_px - this.scr_wh[0]/2;
-        const scr_ty = img_xy[1] * this.zoom_px_of_img_px - this.scr_wh[1]/2;
-        this.zoom_scr_ofs = [scr_lx, scr_ty];
-    }
-
-    //zz All done
-}
-
 
 //a ImageCanvas
 class ImageCanvas {
@@ -725,8 +294,8 @@ class ImageCanvas {
 
         const img_cxy = this.zw.get_img_cxy();
         const img_bounds = this.zw.img_bounds();
-        const img_lx_grid = round_to_multiple(img_bounds[0], img_px_grid, 1);
-        const img_ty_grid = round_to_multiple(img_bounds[1], img_px_grid, 1);
+        const img_lx_grid = utils.round_to_multiple(img_bounds[0], img_px_grid, 1);
+        const img_ty_grid = utils.round_to_multiple(img_bounds[1], img_px_grid, 1);
         const img_lx_grid_t_ofs = (img_lx_grid / img_px_grid) % img_px_thicker;
         const img_ty_grid_t_ofs = (img_ty_grid / img_px_grid) % img_px_thicker;
 
@@ -793,9 +362,91 @@ class ImageCanvas {
         this.just_redraw_canvas();
     }
 
+    //mp redraw_nps
+    redraw_nps(ctx) {
+        if (!this.ic.nps) {
+            return;
+        }
+        const cl = 6;
+        const cw = 2;
+
+        for (const name of this.ic.nps.pts()) {
+            const np = this.ic.nps.get_pt(name);
+            const xyz = np.model;
+            const pxy = this.zw.scr_xy_of_img_xy(this.ic.cam.map_model(xyz));
+            ctx.fillStyle = np.color;
+            ctx.fillRect(pxy[0]-cl, pxy[1]-cw, cl*2, cw*2);
+            ctx.fillRect(pxy[0]-cw, pxy[1]-cl, cw*2, cl*2);
+        }
+    }
+    
+    //mp redraw_pms
+    redraw_pms(ctx) {
+        if (!this.ic.pms) {
+            return;
+        }
+        const cl = 6;
+        const cw = 2;
+        
+        let num_mappings = this.ic.pms.length;
+        for (let i = 0; i < num_mappings; i++) { 
+            const n = this.ic.pms.get_name(i);
+            const np = this.ic.nps.get_pt(n);
+            const xy = this.ic.pms.get_xy(i);
+            const sxy = this.zw.scr_xy_of_img_xy(xy);
+            ctx.strokeStyle = np.color;
+            ctx.beginPath();
+            ctx.arc(sxy[0], sxy[1], cl, 0, Math.PI * 2, true);
+            ctx.stroke();
+        }
+    }
+
+    //mp redraw_rays
+    redraw_rays(ctx) {
+        if (!this.ic.nps || !this.ic.trace_ray_name) {
+            return;
+        }
+        const np = this.ic.nps.get_pt(this.ic.trace_ray_name);
+        if (!np) {
+            return;
+        }
+        ctx.strokeStyle = np.color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i=0; i<this.ic.ncips(); i++) {
+            if (i == this.ic.cip_of_project) {
+                continue;
+            }
+            const cip = this.ic.cip(i);
+            const mapping = cip.pms.mapping_of_name(this.ic.trace_ray_name);
+            if (!mapping) {
+                continue;
+            }
+            const ray = cip.camera.get_pm_as_ray(cip.pms, mapping, true);
+            const focus_distance = cip.camera.focus_distance;
+            for (let k=0; k<100; k++) {
+                const xyz = ray.model_at_distance((k+50)*focus_distance/100);
+                const pxy = this.zw.scr_xy_of_img_xy(this.ic.cam.map_model(xyz));
+                if (k==0) {
+                    ctx.moveTo(pxy[0], pxy[1]);
+                } else {
+                    ctx.lineTo(pxy[0], pxy[1]);
+                }
+            }
+        }                    
+        ctx.stroke();
+    }
+
     //mp just_redraw_canvas
     just_redraw_canvas() {
-        this.ic.redraw_canvas(this.canvas, this.zw);
+        // this.ic.redraw_canvas(this.canvas, this.zw);
+        const ctx = this.canvas.getContext("2d");
+
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.redraw_nps(ctx);
+        this.redraw_pms(ctx);
+        this.redraw_rays(ctx);
+
         this.redraw_grid(this.canvas);
         this.redraw_cursor(this.canvas);
     }
@@ -1366,7 +1017,7 @@ class Browser {
         const cdb_contents = [];
         for (const f of window.file_set.dir().files_of_type("cdb")) {
             let t = this.file_set.load_file("cdb", f);
-            const obj = parse_json(t);
+            const obj = utils.parse_json(t);
             var bodies_html = "";
             for (const b of obj.bodies) {
                 bodies_html += `${b.name}<br>`;
@@ -1383,7 +1034,7 @@ class Browser {
         const proj_contents = [];
         for (const f of window.file_set.dir().files_of_type("proj")) {
             let t = this.file_set.load_file("proj", f);
-            const obj = parse_json(t);
+            const obj = utils.parse_json(t);
             const link = this.file_link("proj", f);
             proj_contents.push( [link, obj.cdb, obj.nps, obj.cips.length] );
         }
@@ -1392,7 +1043,7 @@ class Browser {
         const nps_contents = [];
         for (const f of window.file_set.dir().files_of_type("nps")) {
             let t = this.file_set.load_file("nps", f);
-            const obj = parse_json(t);
+            const obj = utils.parse_json(t);
             const num_pts = obj.length;
             nps_contents.push( [f, `${num_pts}`] );
         }
@@ -1401,7 +1052,7 @@ class Browser {
         const pms_contents = [];
         for (const f of window.file_set.dir().files_of_type("pms")) {
             let t = this.file_set.load_file("pms", f);
-            const obj = parse_json(t);
+            const obj = utils.parse_json(t);
             const num_pts = obj.length;
             pms_contents.push( [f, `${num_pts}`] );
         }
@@ -1410,7 +1061,7 @@ class Browser {
         const cam_contents = [];
         for (const f of window.file_set.dir().files_of_type("cam")) {
             let t = this.file_set.load_file("cam", f);
-            const obj = parse_json(t);
+            const obj = utils.parse_json(t);
             const cam_html = obj.body + "<br>" + obj.lens + "<br>Focus distance " + obj.mm_focus_distance + "mm";
             const posn_html = obj.position[0].toFixed(2) + ", " + obj.position[1].toFixed(2) + ", " + obj.position[2].toFixed(2);
             cam_contents.push( [f, cam_html, posn_html] );
