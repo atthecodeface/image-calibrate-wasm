@@ -60,77 +60,13 @@ function find_data_type(data) {
     return;
 }
     
-//a Ic
-class Ic {
+//a Project
+//mp load_project
+function load_project(file_set, name) {
+}
 
-    //fp constructor
-    constructor(file_set) {
-        this.file_set = file_set;
-        this.project = new WasmProject();
-        this.project_name = null;
-        this.nps = null;
-        this.cip_of_project = 0;
-        this.trace_ray_name = null;
-    }
-
-    //mp load_project
-    load_project(name) {
-        const data = this.file_set.load_file("proj", name);
-        if (!data) {
-            window.log.add_log(5, "project", "load", `Failed to read project ${name}`);
-            return;
-        }
-        this.project_name = name;
-        this.project = new WasmProject();
-
-        this.project.read_json(data);
-        this.nps = this.project.nps;
-        this.select_cip_of_project(0);
-        window.log.add_log(0, "project", "load", `Read project ${name}`);
-    }
-
-    //mp select_cip_of_project
-    select_cip_of_project(n) {
-        if (n > this.ncips()) {
-            n = 0;
-        }
-        this.cip_of_project = n;
-        const cip = this.cip(this.cip_of_project);
-        this.cam = cip.camera;
-        this.pms = cip.pms;
-        this.img_src = cip.img;
-    }
-
-    //mp ncips
-    ncips() {
-        return this.project.ncips();
-    }
-
-    //mp cip
-    cip(n) {
-        return this.project.cip(n);
-    }
-
-    //mp save_project
-    save_project() {
-        this.file_set.save_file("proj",
-                                this.project_name,
-                                this.project.to_json(true)
-                               );
-    }
-
-    //mp locate_all
-    locate_all() {
-        this.project.locate_all();
-    }
-
-    //mp derive_nps_location
-    /// Returns the point and the worst distance
-    derive_nps_location(name) {
-        return this.project.derive_nps_location(name);
-    }
-
-    //zz All done
+//mp save_project
+function save_project(file_set, project, project_name) {
 }
 
 //a ImageCanvas
@@ -149,7 +85,6 @@ class ImageCanvas {
         this.image_div.appendChild(this.image);
 
         this.file_set = file_set;
-        this.ic = new Ic(this.file_set);
         
         const width = this.div.offsetWidth;
         const height = this.div.offsetHeight;
@@ -160,11 +95,16 @@ class ImageCanvas {
         this.image_div.style.width = width+"px";
         this.image_div.style.height = height+"px";
 
+        this.src_width = width;
+        this.src_height = height;
+        this.center_pxy= [0,0];
+
         this.drag = null;
         this.cursor = null;
         this.animating = false;
         this.min_grid_spacing = 30;
         this.zw = new ZoomedWindow([width, height]);
+        this.trace_ray_name = null;
 
         const me = this;
         this.canvas.addEventListener('wheel', function(e) {me.wheel(e);});
@@ -173,20 +113,32 @@ class ImageCanvas {
         this.canvas.addEventListener('mouseout', function(e) {me.mouse_up(e);});
         this.canvas.addEventListener('mousemove', function(e) {me.mouse_move(e);});
 
-        this.redraw_canvas();
+        this.update_img_size_or_zoom();
         this.image_div.width = width;
         this.image_div.height = height;
 
-        this.image.addEventListener('load', function(e) { me.redraw_canvas(); } );
-        const proj = this.file_set.dir().files_of_type("proj")[0];
-        console.log(this.file_set.dir().files_of_type("proj"));
-        this.load_project(proj);
+        this.image.addEventListener('load', function(e) { me.update_img_size_or_zoom(); } );
+
+        window.log.add_log(0, "window", "init", "Projects available:" + this.file_set.dir().files_of_type("proj"));
+
+        this.project = new WasmProject();
+        this.nps = this.project.nps;
+        this.cam = null;
+        this.pms = null;
+        this.cip_of_project = 0;
+        this.project_name = null;
+        this.load_project(this.file_set.dir().files_of_type("proj")[0]);
+        window.log.add_log(0, "project", "load", `Read project ${name}`);
         }
 
-    //mp update_info
-    update_info() {
-        // console.log("Location", this.ic.cam.location);
-        // console.log("Orientation", this.ic.cam.orientation);
+    //mp update_img_size_or_zoom
+    update_img_size_or_zoom() {
+        this.src_width = this.image.naturalWidth;
+        this.src_height = this.image.naturalHeight;
+        this.center_pxy= [this.src_width / 2, this.src_height / 2];
+        this.zw.set_img(this.src_width, this.src_height);
+            
+        this.just_redraw_canvas();
     }
 
     //mp redraw_grid
@@ -267,29 +219,18 @@ class ImageCanvas {
         ctx.stroke();
     }
     
-    //mp redraw_canvas
-    redraw_canvas() {
-        this.src_width = this.image.naturalWidth;
-        this.src_height = this.image.naturalHeight;
-        this.zw.set_img(this.src_width, this.src_height);
-            
-        this.zw.set_zoom_scr(this.image_div.scrollLeft, this.image_div.scrollTop);
-        this.update_info();
-        this.just_redraw_canvas();
-    }
-
     //mp redraw_nps
     redraw_nps(ctx) {
-        if (!this.ic.nps) {
+        if (!this.nps) {
             return;
         }
         const cl = 6;
         const cw = 2;
 
-        for (const name of this.ic.nps.pts()) {
-            const np = this.ic.nps.get_pt(name);
+        for (const name of this.nps.pts()) {
+            const np = this.nps.get_pt(name);
             const xyz = np.model;
-            const pxy = this.zw.scr_xy_of_img_xy(this.ic.cam.map_model(xyz));
+            const pxy = this.zw.scr_xy_of_img_xy(this.camera.map_model(xyz));
             ctx.fillStyle = np.color;
             ctx.fillRect(pxy[0]-cl, pxy[1]-cw, cl*2, cw*2);
             ctx.fillRect(pxy[0]-cw, pxy[1]-cl, cw*2, cl*2);
@@ -298,17 +239,17 @@ class ImageCanvas {
     
     //mp redraw_pms
     redraw_pms(ctx) {
-        if (!this.ic.pms) {
+        if (!this.pms) {
             return;
         }
         const cl = 6;
         const cw = 2;
         
-        let num_mappings = this.ic.pms.length;
+        let num_mappings = this.pms.length;
         for (let i = 0; i < num_mappings; i++) { 
-            const n = this.ic.pms.get_name(i);
-            const np = this.ic.nps.get_pt(n);
-            const xy = this.ic.pms.get_xy(i);
+            const n = this.pms.get_name(i);
+            const np = this.nps.get_pt(n);
+            const xy = this.pms.get_xy(i);
             const sxy = this.zw.scr_xy_of_img_xy(xy);
             ctx.strokeStyle = np.color;
             ctx.beginPath();
@@ -319,22 +260,22 @@ class ImageCanvas {
 
     //mp redraw_rays
     redraw_rays(ctx) {
-        if (!this.ic.nps || !this.ic.trace_ray_name) {
+        if (!this.nps || !this.trace_ray_name) {
             return;
         }
-        const np = this.ic.nps.get_pt(this.ic.trace_ray_name);
+        const np = this.nps.get_pt(this.trace_ray_name);
         if (!np) {
             return;
         }
         ctx.strokeStyle = np.color;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let i=0; i<this.ic.ncips(); i++) {
-            if (i == this.ic.cip_of_project) {
+        for (let i=0; i<this.project.ncips(); i++) {
+            if (i == this.cip_of_project) {
                 continue;
             }
-            const cip = this.ic.cip(i);
-            const mapping = cip.pms.mapping_of_name(this.ic.trace_ray_name);
+            const cip = this.project.cip(i);
+            const mapping = cip.pms.mapping_of_name(this.trace_ray_name);
             if (!mapping) {
                 continue;
             }
@@ -342,7 +283,7 @@ class ImageCanvas {
             const focus_distance = cip.camera.focus_distance;
             for (let k=0; k<100; k++) {
                 const xyz = ray.model_at_distance((k+50)*focus_distance/100);
-                const pxy = this.zw.scr_xy_of_img_xy(this.ic.cam.map_model(xyz));
+                const pxy = this.zw.scr_xy_of_img_xy(this.camera.map_model(xyz));
                 if (k==0) {
                     ctx.moveTo(pxy[0], pxy[1]);
                 } else {
@@ -355,7 +296,9 @@ class ImageCanvas {
 
     //mp just_redraw_canvas
     just_redraw_canvas() {
-        // this.ic.redraw_canvas(this.canvas, this.zw);
+        // Set the zw scr_ofs from the current canvas position over
+        // the zoomed image
+        this.zw.set_zoom_scr(this.image_div.scrollLeft, this.image_div.scrollTop);
         const ctx = this.canvas.getContext("2d");
 
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -402,7 +345,8 @@ class ImageCanvas {
 
                 const input = html.add_ele(cursor_info, "input");
                 input.type = "button";
-                input.value = `Cursor at ${html.position(cxy,0)}`;
+                let cursor_rel = [cxy[0]-this.center_pxy[0],cxy[1]-this.center_pxy[1]];
+                input.value = `Cursor at ${html.position(cursor_rel,0)}`;
                 input.addEventListener('click', function(value) {me.focus_on_src(cxy);} );
 
                 const clear = html.add_ele(cursor_info, "input");
@@ -413,7 +357,7 @@ class ImageCanvas {
         } else {
             this.cursor = null;
             cursor_info.innerText = `No cursor`;
-            this.redraw_canvas();
+            this.just_redraw_canvas();
         }
     }
 
@@ -467,7 +411,7 @@ class ImageCanvas {
             while (cip_list.firstChild) {
                 cip_list.removeChild(cip_list.firstChild);
             }
-            for (let i=0; i<this.ic.ncips(); i++) {
+            for (let i=0; i<this.project.ncips(); i++) {
                 const opt = document.createElement("option");
                 opt.setAttribute("value", i);
                 opt.innerText = i;
@@ -477,11 +421,26 @@ class ImageCanvas {
     }
     
     //mp load_project
-    load_project(proj) {
-        this.ic.load_project(proj);
-        this.image.src = this.ic.img_src;
+    load_project(name) {
+        this.project = new WasmProject();
+        const data = this.file_set.load_file("proj", name);
+        if (!data) {
+            window.log.add_log(5, "project", "load", `Failed to read project ${name}`);
+            return;
+        }
+        this.project.read_json(data);
+        this.project_name = name;
         this.refill_cip_list();
         this.select_cip_of_project(0);
+    }
+
+    //mp save_project
+    save_project() {
+        this.file_set.save_file("proj",
+                                this.project_name,
+                                this.project.to_json(true)
+                               );
+        window.log.add_log(5, "project", "save", `Saved to project ${this.project_name}`);
     }
 
     //mi wheel
@@ -535,6 +494,7 @@ class ImageCanvas {
         this.image_div.scrollLeft = zoom_scr[0];
         this.image_div.scrollTop = zoom_scr[1];
        
+        this.zw.set_zoom_scr(this.image_div.scrollLeft, this.image_div.scrollTop);
         const zoom_e = document.getElementById("zoom");
         if (zoom_e) {
             zoom_e.min = Math.log(this.zw.min_zoom);
@@ -546,7 +506,7 @@ class ImageCanvas {
     //mi zoom_image_canvas
     zoom_image_canvas(scale, fx, fy) {
         this.zoom_set(scale * this.zw.get_zoom(), [fx, fy]);
-        this.redraw_canvas();
+        this.just_redraw_canvas();
     }
 
     //mi zoom_by
@@ -558,7 +518,7 @@ class ImageCanvas {
                 zoom = this.zw.get_zoom() * delta;
             }
             this.zoom_set(zoom);
-            this.redraw_canvas();
+            this.just_redraw_canvas();
         }
     }
 
@@ -566,7 +526,7 @@ class ImageCanvas {
     scroll_by(dx, dy) {
         this.image_div.scrollLeft -= dx;
         this.image_div.scrollTop -= dy;
-        this.redraw_canvas();
+        this.just_redraw_canvas();
     }
 
     //mi focus_on_src
@@ -574,34 +534,27 @@ class ImageCanvas {
         this.zw.scr_focus_on_xy(xy);
         this.image_div.scrollLeft = this.zw.zoom_scr_ofs[0];
         this.image_div.scrollTop = this.zw.zoom_scr_ofs[1];
-        this.redraw_canvas();
-    }
-
-    //mp reorient
-    reorient() {
-        console.log(this.ic.cam.to_json());
-        console.log(this.ic.cam.reorient_using_rays_from_model(this.ic.pms));
-        this.redraw_canvas();
+        this.just_redraw_canvas();
     }
 
     //mp locate
     locate() {
-        console.log("Located with error", this.ic.cam.locate_using_model_lines(this.ic.pms));
-        console.log("Oriented error", this.ic.cam.orient_using_rays_from_model(this.ic.pms));
+        console.log("Located with error", this.camera.locate_using_model_lines(this.pms));
+        console.log("Oriented error", this.camera.orient_using_rays_from_model(this.pms));
         this.refill_camera_info();
-        this.redraw_canvas();
+        this.just_redraw_canvas();
     }
 
     //mp set_focus_distance
     set_focus_distance(f, delta=null) {
         if (f === null) {
-            f = this.ic.cam.focus_distance + delta;
+            f = this.camera.focus_distance + delta;
         }
-        this.ic.cam.focus_distance = f;
-        console.log("Located with error", this.ic.cam.locate_using_model_lines(this.ic.pms));
-        console.log("Oriented error", this.ic.cam.orient_using_rays_from_model(this.ic.pms));
+        this.camera.focus_distance = f;
+        console.log("Located with error", this.camera.locate_using_model_lines(this.pms));
+        console.log("Oriented error", this.camera.orient_using_rays_from_model(this.pms));
         this.refill_camera_info();
-        this.redraw_canvas();
+        this.just_redraw_canvas();
     }
 
     //mp nps_sort_by
@@ -630,20 +583,20 @@ class ImageCanvas {
             const table_classes = ["", "sticky_heading"];
             const headings = ["Rays", "Name", "Color", "Location", "R Err", "Expected at", "Focus", "Mapped to", "Focus", "Delete"];
             const contents = [];
-            const pms = this.ic.pms;
-            const cam = this.ic.cam;
+            const pms = this.pms;
+            const cam = this.camera;
 
             form.elements["sort"].value = this.nps_sort;
 
-            let cx = 3360;
-            let cy = 2240;
+            let cx = this.center_pxy[0];
+            let cy = this.center_pxy[1];
             if (this.cursor) {
                 cx = this.cursor[0];
                 cy = this.cursor[1];
             }
             const nps_data = [];
-            for (const np_name of this.ic.nps.pts()) {
-                const np = this.ic.nps.get_pt(np_name);
+            for (const np_name of this.nps.pts()) {
+                const np = this.nps.get_pt(np_name);
                 const np_pxy = cam.map_model(np.model);
                 const dx = np_pxy[0]-cx;
                 const dy = np_pxy[1]-cy;
@@ -705,7 +658,7 @@ class ImageCanvas {
                 const np_id = "np__" + np.name;
                 const rays = `<input type='radio' value='${np.name}' name='nps' id='${np_id}' oninput='window.image_canvas.rays_of_nps(this.value)'/><label for='${np_id}'  ${np_style}>&#x263C;</label> `;
                 const r_err = `${np.error.toFixed(3)}`;
-                const expected_at = `${html.position([np_x-3360, np_y-2240],0)}`;
+                const expected_at = `${html.position([np_x-this.center_pxy[0], np_y-this.center_pxy[1]],0)}`;
                 const focus_np = `<input type='button' value='&#x271A;' ${np_style} onclick='window.image_canvas.focus_on_src([${np_x},${np_y}])'>`;
                 let mapped_to = `<input type='button' value="Set to cursor" onclick='window.image_canvas.set_pms_to_cursor("${np.name}")'>`;
                 let focus_pm = "";
@@ -715,7 +668,7 @@ class ImageCanvas {
                     let y = np.map_pxye[1];
                     let e = np.map_pxye[2];
                     focus_pm = `<input type='button' value='&xcirc;' ${np_style} onclick='window.image_canvas.focus_on_src([${x},${y}])'>`;
-                    mapped_to = `(${html.position([x-3360,y-2240])}  (err ${e})`;
+                    mapped_to = `(${html.position([x-this.center_pxy[0],y-this.center_pxy[1]])}  (err ${e})`;
                     delete_pms =`<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.delete_pms("${np.name}")'>`;
                 }
                 let location = `<input type='button' value='&#x1F5D1;' onclick='window.image_canvas.derive_nps_location("${np.name}")'>&nbsp;${html.position(np.model)}`;
@@ -723,8 +676,8 @@ class ImageCanvas {
             }
             const table = html.table(table_classes, headings, contents);
             form.append(table);
-            if (this.ic.trace_ray_name) {
-                form.elements["nps"].value = this.ic.trace_ray_name;
+            if (this.trace_ray_name) {
+                form.elements["nps"].value = this.trace_ray_name;
             }
         }
     }    
@@ -735,9 +688,9 @@ class ImageCanvas {
         if (camera_info) {
             html.clear(camera_info);
 
-            const cip = this.ic.cip(this.ic.cip_of_project);
-            const n_cip = this.ic.ncips();
-            const cip_num = `${this.ic.cip_of_project} of ${n_cip}`;
+            const cip = this.project.cip(this.cip_of_project);
+            const n_cip = this.project.ncips();
+            const cip_num = `${this.cip_of_project} of ${n_cip}`;
             const itable = html.vtable("", 
                                        [ ["CIP", cip_num],
                                         ["Camera", cip.cam_file],
@@ -746,19 +699,19 @@ class ImageCanvas {
                                       ] );
             camera_info.append(itable);
 
-            const location = html.position(this.ic.cam.location);
+            const location = html.position(this.camera.location);
 
-            var orientation = this.ic.cam.orientation;
+            var orientation = this.camera.orientation;
             orientation = [-orientation[0].toFixed(2),
                            -orientation[1].toFixed(2),
                            -orientation[2].toFixed(2),
                            -orientation[3].toFixed(2),
                           ];
             orientation = `${orientation[0]}, ${orientation[1]}, ${orientation[2]}, ${orientation[3]}`;
-            const focus_distance = this.ic.cam.focus_distance;
-            const focused_on = html.position(quaternion_x_vector(this.ic.cam.orientation, [0,0,-focus_distance], this.ic.cam.location));
-            const direction = html.position(quaternion_x_vector(this.ic.cam.orientation, [0,0,-focus_distance]));
-            const up = html.position(quaternion_x_vector(this.ic.cam.orientation, [0,-10,0]));
+            const focus_distance = this.camera.focus_distance;
+            const focused_on = html.position(quaternion_x_vector(this.camera.orientation, [0,0,-focus_distance], this.camera.location));
+            const direction = html.position(quaternion_x_vector(this.camera.orientation, [0,0,-focus_distance]));
+            const up = html.position(quaternion_x_vector(this.camera.orientation, [0,-10,0]));
             
             const table_classes = ["", "sticky_heading"];
             const headings = ["Parameter", "Value"];
@@ -769,8 +722,8 @@ class ImageCanvas {
             focus_at += `<input class="widget_button" type="button" value="+" onclick="window.image_canvas.set_focus_distance(null,1);"/>`;
             focus_at += `<input class="widget_button" type="button" style="font-weight: bold;" value="+" onclick="window.image_canvas.set_focus_distance(null,10);"/>`;
             const contents = [
-                ["Body", this.ic.cam.body],
-                ["Lens", this.ic.cam.lens],
+                ["Body", this.camera.body],
+                ["Lens", this.camera.lens],
                 ["Focus at", focus_at],
                 ["Location", location],
                 ["Orientation", orientation],
@@ -785,44 +738,47 @@ class ImageCanvas {
 
     //mp select_cip_of_project
     select_cip_of_project(n) {
-        this.ic.select_cip_of_project(n);
-        this.image.src = this.ic.img_src;
+        if (n > this.project.ncips()) {
+            n = 0;
+        }
 
-        if (this.ic.trace_ray_name) {
-            const np = this.ic.nps.get_pt(this.ic.trace_ray_name);
-            const np_pxy = this.ic.cam.map_model(np.model);
+        this.nps = this.project.nps;
+        this.cip_of_project = n;
+        const cip = this.project.cip(this.cip_of_project);
+        this.camera = cip.camera;
+        this.pms = cip.pms;
+        this.image.src = cip.img;
+
+        if (this.trace_ray_name) {
+            const np = this.nps.get_pt(this.trace_ray_name);
+            const np_pxy = this.camera.map_model(np.model);
             this.focus_on_src(np_pxy);
         }
         this.refill_camera_info();
         this.refill_nps_pms();
-        this.redraw_canvas();
-    }
-
-    //mp save_project
-    save_project() {
-        this.ic.save_project();
+        this.update_img_size_or_zoom();
     }
 
     //mp delete_pms
     delete_pms(name) {
-        const pms_n = this.ic.pms.mapping_of_name(name);
+        const pms_n = this.pms.mapping_of_name(name);
         if (pms_n) {
-            this.ic.pms.remove_mapping(pms_n);
+            this.pms.remove_mapping(pms_n);
         }
         this.refill_nps_pms();
-        this.redraw_canvas();
+        this.just_redraw_canvas();
     }
 
     //mp set_pms_to_cursor
     set_pms_to_cursor(name) {
-        const pms_n = this.ic.pms.mapping_of_name(name);
+        const pms_n = this.pms.mapping_of_name(name);
         if (this.cursor) {
             const cx = this.cursor[0];
             const cy = this.cursor[1];
-            this.ic.pms.add_mapping(this.ic.nps, name, [cx, cy], 2);
+            this.pms.add_mapping(this.nps, name, [cx, cy], 2);
         }
         this.refill_nps_pms();
-        this.redraw_canvas();
+        this.just_redraw_canvas();
     }
 
     //mp add_np_at_cursor_fd
@@ -833,66 +789,65 @@ class ImageCanvas {
         if (!name) {
             for (let uid = 10*1000; true; uid=uid+1) {
                 name = `${uid}`;
-                if (!this.ic.nps.get_pt(name)) {
+                if (!this.nps.get_pt(name)) {
                     break;
                 }
             }
         }
         const cx = this.cursor[0];
         const cy = this.cursor[1];
-        const distance = this.ic.cam.focus_distance;
-        const xyz = this.ic.cam.model_at_distance([cx,cy], distance);
+        const distance = this.camera.focus_distance;
+        const xyz = this.camera.model_at_distance([cx,cy], distance);
         const color = "#0ff";
         const wnp = new WasmNamedPoint(name, color);
-        this.ic.nps.add_pt(wnp);
-        this.ic.nps.set_model(name, xyz, 10.0);
+        this.nps.add_pt(wnp);
+        this.nps.set_model(name, xyz, 10.0);
         this.set_pms_to_cursor(name);
         this.refill_nps_pms();
-        this.redraw_canvas();
+        this.just_redraw_canvas();
     }
 
     //mp rays_of_nps
     rays_of_nps(name) {
-        this.ic.trace_ray_name = name;
+        this.trace_ray_name = name;
         const nps_form = document.getElementById("nps_form");
         if (nps_form) {
-            console.log(nps_form, nps_form.elements["nps"].value,name);
             if (name) {
                 nps_form.elements["nps"].value = name;
             } else {
                 nps_form.elements["nps"].value = "banana";
             }
         }
-        this.redraw_canvas();
+        this.just_redraw_canvas();
     }
 
     //mp derive_nps_location
     derive_nps_location(name) {
-        let current_e = this.ic.nps.get_pt(name).error;
+        let current_e = this.nps.get_pt(name).error;
         if (current_e < 0.01) {
             return;
         }
-        const xyz_e = this.ic.derive_nps_location(name);
+        const xyz_e = this.project.derive_nps_location(name);
         if (xyz_e) {
             const xyz = [xyz_e[0], xyz_e[1], xyz_e[2]];
-            this.ic.nps.set_model(name, xyz, xyz_e[3]);
+            this.nps.set_model(name, xyz, xyz_e[3]);
             this.refill_nps_pms();
-            this.redraw_canvas();
+            this.just_redraw_canvas();
         }
     }
 
     //mp derive_all_nps_locations
     derive_all_nps_locations() {
-        for (const name of this.ic.nps.pts()) {
+        for (const name of this.nps.pts()) {
             this.derive_nps_location(name);
         }
     }
 
     //mp locate_all
     locate_all() {
-        this.ic.locate_all()
+        this.project.locate_all()
         this.refill_camera_info();
-        this.redraw_canvas();
+        this.just_redraw_canvas();
     }
 
 
