@@ -9,6 +9,7 @@ import init, {WasmProject, WasmCip, WasmCameraDatabase, WasmCameraInstance, Wasm
 import {Directory, FileSet} from "./files.js";
 import {Log} from "./log.js";
 import * as html from "./html.js";
+import {ProjectSet} from "./project_set.js";
 import * as utils from "./utils.js";
 import {ZoomedWindow} from "./zoomed_window.js";
 
@@ -82,7 +83,8 @@ class ImageCanvas {
 
         this.image.addEventListener('load', function(e) { me.update_img_size_or_zoom(); } );
 
-        window.log.add_log(0, "window", "init", "Projects available:" + this.file_set.dir().files_of_type("proj"));
+        this.project_set = new ProjectSet(this.file_set);
+        this.project_set.callback = function(ps) {me.add_project_list(document.getElementById("project_list"))};
 
         this.project = new WasmProject();
         this.nps = this.project.nps;
@@ -90,9 +92,26 @@ class ImageCanvas {
         this.pms = null;
         this.cip_of_project = 0;
         this.project_name = null;
-        this.load_project(this.file_set.dir().files_of_type("proj")[0]);
+        this.load_project("local:0");
         window.log.add_log(0, "project", "load", `Read project ${name}`);
+    }
+
+    //mp add_project_list
+    add_project_list(project_list) {
+        const me = project_list;
+        const ic = this;
+        project_list.addEventListener('click',
+                                      function(event) {
+                                          ic.load_project(event.target.value);
+                                      } );
+        html.clear(project_list);
+        for (const p of this.project_set.get_projects()) {
+            const opt = document.createElement("option");
+            opt.setAttribute("value", p[2]);
+            opt.innerText = p[0] + ":" + p[1];
+            project_list.appendChild(opt);
         }
+    }
 
     //mp update_img_size_or_zoom
     update_img_size_or_zoom() {
@@ -384,26 +403,23 @@ class ImageCanvas {
     }
     
     //mp load_project
-    load_project(name) {
+    load_project(locator) {
         this.project = new WasmProject();
-        const data = this.file_set.load_file("proj", name);
-        if (!data) {
-            window.log.add_log(5, "project", "load", `Failed to read project ${name}`);
-            return;
-        }
-        this.project.read_json(data);
-        this.project_name = name;
+        const me = this;
+        this.project_set.load_project(locator, function(json) {me.load_project_json(json);});
+        this.project_name = locator;
+    }
+    //mp load_project_json
+    load_project_json(json) {
+        this.project = new WasmProject();
+        this.project.read_json(json);
         this.refill_cip_list();
         this.select_cip_of_project(0);
     }
 
     //mp save_project
     save_project() {
-        this.file_set.save_file("proj",
-                                this.project_name,
-                                this.project.to_json(true)
-                               );
-        window.log.add_log(5, "project", "save", `Saved to project ${this.project_name}`);
+        this.project_set.save_project(this.project_name, this.project);
     }
 
     //mi wheel
@@ -501,20 +517,20 @@ class ImageCanvas {
     }
 
     //mp locate
-    locate() {
-        console.log("Located with error", this.camera.locate_using_model_lines(this.pms));
+    locate(max_nps_error) {
+        console.log("Located with error", this.camera.locate_using_model_lines(this.pms, max_nps_error));
         console.log("Oriented error", this.camera.orient_using_rays_from_model(this.pms));
         this.refill_camera_info();
         this.just_redraw_canvas();
     }
 
     //mp set_focus_distance
-    set_focus_distance(f, delta=null) {
+    set_focus_distance(f, delta=null, max_nps_error=1000.0) {
         if (f === null) {
             f = this.camera.focus_distance + delta;
         }
         this.camera.focus_distance = f;
-        console.log("Located with error", this.camera.locate_using_model_lines(this.pms));
+        console.log("Located with error", this.camera.locate_using_model_lines(this.pms, max_nps_error));
         console.log("Oriented error", this.camera.orient_using_rays_from_model(this.pms));
         this.refill_camera_info();
         this.just_redraw_canvas();
@@ -808,7 +824,7 @@ class ImageCanvas {
 
     //mp locate_all
     locate_all() {
-        this.project.locate_all()
+        this.project.locate_all(10000.0);
         this.refill_camera_info();
         this.just_redraw_canvas();
     }
@@ -828,16 +844,13 @@ init().then(() => {
     }
     const project_list = document.getElementById("project_list");
     if (project_list) {
-        const me = project_list;
-        project_list.addEventListener('click', function(value) {window.image_canvas.load_project(me.selectedOptions[0].value);} );
-        while (project_list.firstChild) {
-            project_list.removeChild(project_list.firstChild);
-        }
-        for (const p of window.file_set.dir().files_of_type("proj")) {
-            const opt = document.createElement("option");
-            opt.setAttribute("value", p);
-            opt.innerText = p;
-            project_list.appendChild(opt);
-        }
+        window.image_canvas.add_project_list(project_list);
     }
+
+    // postData("/project", { answer: 42 }).then((data) => {
+    // console.log(data); // JSON data parsed by `data.json()` call
+    // });
+    
 });
+
+

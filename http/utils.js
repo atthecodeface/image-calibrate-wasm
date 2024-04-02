@@ -3,11 +3,6 @@ export function is_array(obj) {
     return Object.prototype.toString.call(obj) === "[object Array]";
 }
 
-//fp is_array
-export function xis_array(obj) {
-    return Object.prototype.toString.call(obj) === "[object Array]";
-}
-
 //fp is_string
 export function is_string(obj) {
     return typeof obj === "string";

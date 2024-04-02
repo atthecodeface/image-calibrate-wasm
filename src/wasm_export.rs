@@ -66,7 +66,7 @@ pub struct WasmRay {
 #[wasm_bindgen]
 impl WasmRay {
     //fp new
-    /// Create a new WasmCameraInstance from a camera database and a Json file
+    /// Create a new WasmRay
     #[wasm_bindgen(constructor)]
     pub fn new(start: &[f64], dirn: &[f64], tan_error: Option<f64>) -> Result<WasmRay, String> {
         let tan_error = tan_error.unwrap_or(0.01);
@@ -206,10 +206,14 @@ impl WasmCameraInstance {
     }
 
     //mp locate_using_model_lines
-    pub fn locate_using_model_lines(&mut self, wpms: &WasmPointMappingSet) -> f64 {
+    pub fn locate_using_model_lines(
+        &mut self,
+        wpms: &WasmPointMappingSet,
+        max_np_error: f64,
+    ) -> f64 {
         self.camera
             .borrow_mut()
-            .locate_using_model_lines(&wpms.pms.borrow())
+            .locate_using_model_lines(&wpms.pms.borrow(), max_np_error)
     }
 
     //mp orient_using_rays_from_model
@@ -672,8 +676,8 @@ impl WasmProject {
     }
 
     //mp locate_all
-    pub fn locate_all(&self) {
-        self.project.locate_all();
+    pub fn locate_all(&self, max_np_error: f64) {
+        self.project.locate_all(max_np_error);
     }
 
     //mp derive_nps_location
