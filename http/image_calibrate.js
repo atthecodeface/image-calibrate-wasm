@@ -744,7 +744,7 @@ class ImageCanvas {
                                       ] );
             camera_info.append(itable);
 
-            const location = html.position(this.camera.location);
+            const location = html.position(this.camera.position);
 
             var orientation = this.camera.orientation;
             orientation = [-orientation[0].toFixed(2),
@@ -754,7 +754,7 @@ class ImageCanvas {
                           ];
             orientation = `${orientation[0]}, ${orientation[1]}, ${orientation[2]}, ${orientation[3]}`;
             const focus_distance = this.camera.focus_distance;
-            const focused_on = html.position(quaternion_x_vector(this.camera.orientation, [0,0,-focus_distance], this.camera.location));
+            const focused_on = html.position(quaternion_x_vector(this.camera.orientation, [0,0,-focus_distance], this.camera.position));
             const direction = html.position(quaternion_x_vector(this.camera.orientation, [0,0,-focus_distance]));
             const up = html.position(quaternion_x_vector(this.camera.orientation, [0,-10,0]));
             

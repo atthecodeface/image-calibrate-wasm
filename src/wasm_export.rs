@@ -6,7 +6,7 @@ use wasm_bindgen::prelude::*;
 
 use image_calibrate::CameraPolynomial as CameraInstance;
 use image_calibrate::{
-    CameraAdjustMapping, CameraDatabase, CameraProjection, CameraPtMapping, CameraView, Cip, Color,
+    CameraAdjustMapping, CameraDatabase, CameraProjection, CameraPtMapping, Cip, Color,
     NamedPointSet, Point2D, Point3D, PointMappingSet, Project, Ray, Rrc,
 };
 
@@ -132,17 +132,17 @@ impl WasmCameraInstance {
         self.camera.borrow().lens_name().into()
     }
 
-    //mp location
+    //mp position
     #[wasm_bindgen(getter)]
-    pub fn location(&self) -> Result<Box<[f64]>, String> {
-        let xyz: [f64; 3] = self.camera.borrow().location().into();
+    pub fn position(&self) -> Result<Box<[f64]>, String> {
+        let xyz: [f64; 3] = self.camera.borrow().position().into();
         Ok(Box::new(xyz))
     }
 
     //mp orientation
     #[wasm_bindgen(getter)]
     pub fn orientation(&self) -> Box<[f64]> {
-        let q: [f64; 4] = self.camera.borrow().direction().into();
+        let q: [f64; 4] = self.camera.borrow().orientation().into();
         Box::new(q)
     }
 
@@ -194,7 +194,7 @@ impl WasmCameraInstance {
     //mp model_at_distance
     pub fn model_at_distance(&self, pt: &[f64], distance: f64) -> Result<Box<[f64]>, String> {
         let txty = self.camera.borrow().px_abs_xy_to_camera_txty(point2d(pt)?);
-        let model = self.camera.borrow().location()
+        let model = self.camera.borrow().position()
             - self.camera.borrow().camera_txty_to_world_dir(&txty) * distance;
         let model: [f64; 3] = model.into();
         Ok(Box::new(model))
