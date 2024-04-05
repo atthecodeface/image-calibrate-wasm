@@ -4,9 +4,10 @@ use std::default::Default;
 use js_sys::Array;
 use wasm_bindgen::prelude::*;
 
+use image_calibrate::CameraPolynomial as CameraInstance;
 use image_calibrate::{
-    CameraAdjustMapping, CameraDatabase, CameraInstance, CameraProjection, CameraPtMapping,
-    CameraView, Cip, Color, NamedPointSet, Point2D, Point3D, PointMappingSet, Project, Ray, Rrc,
+    CameraAdjustMapping, CameraDatabase, CameraProjection, CameraPtMapping, CameraView, Cip, Color,
+    NamedPointSet, Point2D, Point3D, PointMappingSet, Project, Ray, Rrc,
 };
 
 //a Helpful functions
