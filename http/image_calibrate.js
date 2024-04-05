@@ -9,7 +9,7 @@ import init, {WasmProject, WasmCip, WasmCameraDatabase, WasmCameraInstance, Wasm
 import {Directory, FileSet} from "./files.js";
 import {Log} from "./log.js";
 import * as html from "./html.js";
-import {ProjectSet} from "./project_set.js";
+import {ProjectSet, ServerProject} from "./project_set.js";
 import * as utils from "./utils.js";
 import {ZoomedWindow} from "./zoomed_window.js";
 
@@ -85,11 +85,13 @@ class ImageCanvas {
 
         this.project_set = new ProjectSet(this.file_set);
         this.project_set.callback = function(ps) {me.add_project_list(document.getElementById("project_list"))};
-
+        this.server_project = null;
+        
         this.project = new WasmProject();
         this.nps = this.project.nps;
         this.cam = null;
         this.pms = null;
+        this.mesh = [];
         this.cip_of_project = 0;
         this.project_name = null;
         this.load_project("local:0");
@@ -121,6 +123,32 @@ class ImageCanvas {
         this.zw.set_img(this.src_width, this.src_height);
             
         this.just_redraw_canvas();
+    }
+
+    //mp redraw_mesh
+    redraw_mesh(ctx) {
+        if (!this.mesh || this.mesh == []) {
+            return;
+        }
+        if (!this.pms) {
+            return;
+        }
+        
+        ctx.strokeStyle = "#fcc";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (const m of this.mesh) {
+            for (let i = 0; i < m.length+1; i++) { 
+                const xy = this.pms.get_xy(m[i % m.length]);
+                const sxy = this.zw.scr_xy_of_img_xy(xy);
+                if (i==0) {
+                    ctx.moveTo(sxy[0], sxy[1]);
+                } else {
+                    ctx.lineTo(sxy[0], sxy[1]);
+                }
+            }
+        }
+        ctx.stroke();
     }
 
     //mp redraw_grid
@@ -287,7 +315,7 @@ class ImageCanvas {
         this.redraw_nps(ctx);
         this.redraw_pms(ctx);
         this.redraw_rays(ctx);
-
+        this.redraw_mesh(ctx);
         this.redraw_grid(this.canvas);
         this.redraw_cursor(this.canvas);
     }
@@ -406,15 +434,53 @@ class ImageCanvas {
     load_project(locator) {
         this.project = new WasmProject();
         const me = this;
-        this.project_set.load_project(locator, function(json) {me.load_project_json(json);});
+        this.project_set.load_project(locator,
+                                      function(local, json) {
+                                          me.load_project_json(locator, json);
+                                      });
         this.project_name = locator;
     }
+
     //mp load_project_json
-    load_project_json(json) {
+    load_project_json(locator, json) {
+        this.server_project = null;
+        this.mesh = [];
         this.project = new WasmProject();
         this.project.read_json(json);
         this.refill_cip_list();
         this.select_cip_of_project(0);
+        const dl = this.project_set.decode_locator(locator);
+        const me = this;
+        if (dl[0] == "server") {
+            this.server_project = new ServerProject("/project/"+dl[1], this.project);
+            this.server_project.fetch_thumbnails(100, function() {me.update_thumbnails();});
+            this.server_project.fetch_meshes(function() {me.update_mesh();});
+        }
+    }
+
+    //mp update_mesh
+    update_mesh() {
+        this.mesh = [];
+        if (this.server_project) {
+            this.mesh = this.server_project.get_mesh(this.cip_of_project);
+        }
+    }
+
+    //mp update_thumbnails
+    update_thumbnails() {
+        const me = this;
+        const i = document.getElementById("thumbnails");
+        if (i && this.server_project) {
+            html.clear(i);
+            for (const n in this.server_project.thumbnails) {
+                if (this.server_project.thumbnails[n]) {
+                    const a = html.add_ele(i, "a");
+                    a.addEventListener('click', function(e) {me.select_cip_of_project(n);});
+                    const img = html.add_ele(a, "img");
+                    img.src = URL.createObjectURL(this.server_project.thumbnails[n]);
+                }
+            }
+        }
     }
 
     //mp save_project
@@ -730,9 +796,14 @@ class ImageCanvas {
 
         if (this.trace_ray_name) {
             const np = this.nps.get_pt(this.trace_ray_name);
-            const np_pxy = this.camera.map_model(np.model);
-            this.focus_on_src(np_pxy);
+            if (np) {
+                const np_pxy = this.camera.map_model(np.model);
+                this.focus_on_src(np_pxy);
+            } else {
+                this.trace_ray_name = null;
+            }
         }
+        this.update_mesh();
         this.refill_camera_info();
         this.refill_nps_pms();
         this.update_img_size_or_zoom();
@@ -740,6 +811,10 @@ class ImageCanvas {
 
     //mp delete_pms
     delete_pms(name) {
+        if (this.server_project) {
+            this.server_project.clear_meshes();
+            this.update_mesh();
+        }
         const pms_n = this.pms.mapping_of_name(name);
         if (pms_n) {
             this.pms.remove_mapping(pms_n);

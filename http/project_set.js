@@ -2,6 +2,100 @@
 import {Log} from "./log.js";
 import * as utils from "./utils.js";
 
+//a ServerProject
+export class ServerProject {
+    //fp constructor
+    constructor(uri, project) {
+        this.uri = uri;
+        this.project = project;
+        this.thumbnails = [];
+        this.meshes = [];
+    }
+
+    //mp fetch_thumbnail
+    async fetch_thumbnail(cip, width) {
+        while (this.thumbnails.length < cip) {
+            this.thumbnails.push(null);
+        }
+        this.thumbnails[cip] = null;
+        return fetch(`${this.uri}?thumbnail&cip=${cip}&width=${width}`)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch thumbnail: ${response.status}`);
+                }
+                return response.arrayBuffer();
+            })
+            .then((data) => {
+                const blob = new Blob([data], {type:"image/jpeg"});
+                return blob;
+            })
+    }
+
+    //mp fetch_mesh
+    async fetch_mesh(cip) {
+        while (this.meshes.length < cip) {
+            this.meshes.push([]);
+        }
+        this.meshes[cip] = [];
+        return fetch(`${this.uri}?mesh&cip=${cip}`)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch thumbnail: ${response.status}`);
+                }
+                return response.json();
+            })
+    }
+
+    //mp fetch_thumbnails
+    fetch_thumbnails(width, callback) {
+        this.thumbnails = [];
+        const me = this;
+        let promises = [];
+        for (let i=0; i<this.project.ncips(); i++) {
+            promises.push(
+                this.fetch_thumbnail(i, width)
+                    .then((blob) => {
+                        me.thumbnails[i] = blob;
+                    })
+                    .catch((err) => console.error(`Fetch problem: ${err.message}`))
+            );
+        }
+        Promise.all(promises).then(() => {callback(me);});
+    }
+
+    //mp fetch_meshes
+    fetch_meshes(callback) {
+        this.meshes = [];
+        const me = this;
+        let promises = [];
+        for (let i=0; i<this.project.ncips(); i++) {
+            promises.push(
+                this.fetch_mesh(i)
+                    .then((m) => {
+                        me.meshes[i] = m;
+                    })
+                    .catch((err) => console.error(`Fetch problem: ${err.message}`))
+            );
+        }
+        Promise.all(promises).then(() => {callback(me);});
+    }
+
+    //mp get_mesh
+    get_mesh(cip) {
+        if (cip < this.meshes.length) {
+            return this.meshes[cip];
+        }
+        return null;
+    }
+
+    //mp clear_meshes
+    clear_meshes() {
+        this.meshes = [];
+    }
+
+    //zz AAll Done
+}
+
 //a ProjectSet
 export class ProjectSet {
     //fp constructor
@@ -14,6 +108,7 @@ export class ProjectSet {
         this.add_server_projects();
         window.log.add_log(0, "project_set", "init", "Local projects "+this.projects.local);
     }
+
     //mp decode_locator
     decode_locator(locator) {
         if (locator.startsWith("local:")) {
@@ -25,7 +120,7 @@ export class ProjectSet {
         }
         return null;
     }
-    //mp load_project_json
+    //mp load_project
     load_project(locator_str, callback) {
         const locator = this.decode_locator(locator_str);
         if (!locator) {return;}
@@ -36,7 +131,7 @@ export class ProjectSet {
                 window.log.add_log(5, "project", "load", `Failed to read project ${name}`);
                 return;
             }
-            callback(data);
+            callback(true, data);
         } else if (locator[0] == "server") {
             const name = locator[1];
             fetch("/project/"+name+"?load")
@@ -47,10 +142,11 @@ export class ProjectSet {
                     return response.text();
                 })
                 .then((text) => {
-                    callback(text);
+                    callback(false, text);
                 });
         }
     }
+
     //mp save_project
     save_project(locator_str, project) {
         const locator = this.decode_locator(locator_str);
@@ -100,6 +196,7 @@ export class ProjectSet {
         }
         return projects;
     }
+
     //mp add_server_projects
     add_server_projects(server) {
         const me = this;
@@ -114,6 +211,7 @@ export class ProjectSet {
             .then((json) => me.server_projects_json(json))
             .catch((err) => console.error(`Fetch problem: ${err.message}`));
     }
+
     //mp server_projects_json
     server_projects_json(json) {
         if (utils.is_array(json)) {
@@ -128,5 +226,7 @@ export class ProjectSet {
             this.callback(this);
         }
     }
+
+    //zz All done
 }
 

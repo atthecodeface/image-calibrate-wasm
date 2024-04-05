@@ -7,7 +7,8 @@
   <body>
     <link href="main.css" rel="stylesheet" type="text/css">
     <p>
-      <script type="module" src="./image_calibrate.js"></script>
+    <script type="module" src="./image_calibrate.js"></script>
+    <div id="thumbnails"> </div>
       <table>
         <tr>
           <td id="controls">
@@ -38,7 +39,7 @@
               </tr>
               <tr>
                 <td colspan=3>
-                  <input class="widget_button" type="button" value="Locate 0.1" onclick="window.image_canvas.locate(0.1);"/>
+                <input class="widget_button" type="button" value="Locate 0.1" onclick="window.image_canvas.locate(0.1);"/>
                   <input class="widget_button" type="button" value="Locate 1.0" onclick="window.image_canvas.locate(1.0);"/>
                   <input class="widget_button" type="button" value="Locate 5.0" onclick="window.image_canvas.locate(5.0);"/>
                   <input class="widget_button" type="button" value="Add NP" onclick="window.image_canvas.add_np_at_cursor_fd();"/>
