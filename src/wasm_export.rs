@@ -4,11 +4,8 @@ use std::default::Default;
 use js_sys::Array;
 use wasm_bindgen::prelude::*;
 
-use image_calibrate::CameraPolynomial as CameraInstance;
-use image_calibrate::{
-    CameraAdjustMapping, CameraDatabase, CameraProjection, CameraPtMapping, Cip, Color,
-    NamedPointSet, Point2D, Point3D, PointMappingSet, Project, Ray, Rrc,
-};
+use photogram::json::remove_comments as json_remove_comments;
+use photogram::prelude::*;
 
 //a Helpful functions
 //fi point3d
@@ -43,7 +40,7 @@ impl WasmCameraDatabase {
     /// Create a new WasmCameraDatabase from a Json file
     #[wasm_bindgen(constructor)]
     pub fn new(json: &str) -> Result<WasmCameraDatabase, JsValue> {
-        let json = image_calibrate::json::remove_comments(json);
+        let json = json_remove_comments(json);
         let cdb = CameraDatabase::from_json(&json)
             .map_err(|e| e.to_string())?
             .into();
@@ -110,7 +107,7 @@ impl WasmCameraInstance {
     /// Create a new WasmCameraInstance from a camera database and a Json file
     #[wasm_bindgen(constructor)]
     pub fn new(cdb: &WasmCameraDatabase, json: &str) -> Result<WasmCameraInstance, JsValue> {
-        let json = image_calibrate::json::remove_comments(json);
+        let json = json_remove_comments(json);
         let camera = CameraInstance::from_json(&cdb.cdb.borrow(), &json)?.into();
         Ok(Self { camera })
     }
@@ -260,7 +257,7 @@ impl WasmPointMappingSet {
     //mp read_json
     /// Read a json file to add to the points
     pub fn read_json(&mut self, wnps: &WasmNamedPointSet, json: &str) -> Result<(), JsValue> {
-        let json = image_calibrate::json::remove_comments(json);
+        let json = json_remove_comments(json);
         let nf = self
             .pms
             .borrow_mut()
@@ -438,7 +435,7 @@ impl WasmNamedPointSet {
     //cp read_json
     #[wasm_bindgen]
     pub fn read_json(&mut self, json: &str) -> Result<(), JsValue> {
-        let json = image_calibrate::json::remove_comments(json);
+        let json = json_remove_comments(json);
         let nps = NamedPointSet::from_json(&json)?;
         self.nps.borrow_mut().merge(&nps);
         Ok(())
@@ -605,7 +602,7 @@ impl WasmProject {
     //cp read_json
     #[wasm_bindgen]
     pub fn read_json(&mut self, json: &str) -> Result<(), JsValue> {
-        let json = image_calibrate::json::remove_comments(json);
+        let json = json_remove_comments(json);
         self.project = Project::from_json(&json)?;
         Ok(())
     }

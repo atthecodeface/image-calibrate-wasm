@@ -17,9 +17,9 @@ indent-display = "0.1"
 lexer-rs = "0.0.3"
 js-sys = ">=0.3.64"
 
-[dependencies.image_calibrate]
+[dependencies.photogram]
 version="0.1"
-path = "../glove/image_calibrate"
+path = "../glove/photogram"
 
 [dependencies.web-sys]
 features = [

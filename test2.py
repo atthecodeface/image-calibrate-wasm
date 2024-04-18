@@ -8,6 +8,112 @@ import numpy as np
 import png
 import numpy as np
 
+@np.vectorize
+def power(c):
+    return c.real ** 2 + c.imag ** 2
+
+@np.vectorize
+def sc_log_power(c):
+    return (8+np.log(c.real ** 2 + c.imag ** 2))*4000
+
+@np.vectorize
+def scale(f, min_f, scale):
+    return (f - min_f) * scale
+
+def angle(c):
+    return math.atan2(c.imag, c.real)/6.283*8.0
+
+def str_cmp(c):
+    p = np.sqrt(power(c))
+    a = angle(c)
+    s = f"C[{p:.2f} {a:.1f}]"
+    return s
+
+e_1_8 = np.power(np.complex128(-1), 0.125)
+print(str_cmp(e_1_8))
+
+ofs = 1
+delta_f = np.zeros([32], np.float32)
+delta_f[0+ofs] = 128/256.0
+delta_f[16+ofs] = 75/256.0
+delta_f[17+ofs] = 54/256.0
+delta_fft_c = np.fft.fft(delta_f)
+p_o = 0
+p_e = 0
+for i in range(32):
+    if i==0: continue
+    if i %2 == 0: 
+        p_e = p_e + math.sqrt(power(delta_fft_c[i]))
+        pass
+    else:
+        p_o = p_o + math.sqrt(power(delta_fft_c[i]))
+        pass
+    pass
+print("Power of odd frequencies of delta_f is", p_o);
+print("Power of even frequencies of delta_f is", p_e);
+
+# 0 => phases 0  0  0  0  0  0  0  0
+# 1 => phases 0 -1 -2 -3  4  3  2  1
+# 2 => phases 0 -2  4  2  0 -2  4  2
+# 3 => phases 0 -3  2 -1  4  1 -2  3
+# 4 => phases 0  4  0  4  0  4  0  4
+#
+# i.e. fft[n, ofs] = (n is even) * e_1_8 ^ (-2n * ofs) * power
+ofs = 1
+delta_f = np.zeros([16], np.float32)
+delta_f[9+ofs] = 1
+delta_f[0+ofs] = 1
+delta_f[1+ofs] = 1
+delta_fft_c = np.fft.fft(delta_f)
+print([str_cmp(c) for c in delta_fft_c])
+print([str_cmp(delta_fft_c[i]*np.power(e_1_8, i)) for i in range(9)])
+
+# Multiply DFT by DFT of 1.0.0...0.1.00.0...
+x = 0
+y = 0
+z = 0
+for i in range(16):
+    f = delta_fft_c[i]
+    # f2 = delta_fft_c[(i+2)%16]
+    if i > 0 and i % 2 == 0 and i<=8:
+        x += power(f)
+        pass
+    elif i%2 == 1:
+        x -= power(f)
+        # z -= f.real ** 2
+        pass
+    if i > 0 and i%2 == 0 and i<8:
+        y += f    
+        z += f * np.power(e_1_8, i)
+        pass
+    pass
+print("ofs", ofs, "x", str_cmp(x), "y", str_cmp(y), "z", str_cmp(z))
+
+# ofs = (2 - z.angle)/2
+#
+# power = sqrt(x/8)
+#
+# we can subtract (n is even) * e_1_8 ^ (-2n * ofs) * power
+z_as_ofs = (2 - angle(z))/2
+
+y = delta_fft_c[8]**2
+#for i in range(8):
+s = 1
+for i in [1,2,3,4,5,6,7]:
+    s = - s
+    y += delta_fft_c[i] * delta_fft_c[16-i] * s
+    pass
+
+x = x / 4
+x = np.sqrt(max(x,0))
+d = delta_fft_c[2]
+print("x", str_cmp(x), "d", str_cmp(delta_fft_c[8]), "y", str_cmp(y))
+d_p = math.sqrt(power(d))
+d_a = delta_fft_c[2] / d_p
+d = [delta_fft_c[2*i] - x*np.power(e_1_8, -2*i*z_as_ofs) for i in range(8)]
+print([str_cmp(c) for c in d])
+argh
+
 filename = "cip0_orig.png"
 # filename = "cip0_sd.png"
 reader = png.Reader(filename)
@@ -95,7 +201,7 @@ subsamp = 8 # decreasing increases line presence and detects more
 # radius = 8 # increasing makes halos
 # subsamp = 8 # decreasing increases line presence and detects more
 
-window = 200
+window = 100
 stride = 2
 
 if False:
@@ -122,44 +228,36 @@ def circle(cx, cy, r, nsamp):
         pass
     return data_f
 
-@np.vectorize
-def power(c):
-    return c.real ** 2 + c.imag ** 2
-
-@np.vectorize
-def sc_log_power(c):
-    return (8+np.log(c.real ** 2 + c.imag ** 2))*4000
-
-@np.vectorize
-def scale(f, min_f, scale):
-    return (f - min_f) * scale
-
-delta_f = np.zeros([16], np.float32)
-delta_f[0] = 1
-delta_f[1] = 1
-delta_f[2] = 1
-delta_f[3] = 1
-delta_f[8] = 1
-delta_f[9] = 1
-delta_f[10] = 1
-delta_f[11] = 1
-delta_fft_c = np.fft.fft(delta_f)
-print(delta_fft_c)
-
 def pattern_match(img_f, data_c):
-    x_sub = 0
-    for i in range(1,subsamp):
-        x_sub += data_c[i*nsamp//subsamp]
+    x_sub = np.complex128(0)
+    #for i in range(1,subsamp//2):
+    #    x_sub += data_c[i*nsamp//subsamp].real
+    #    pass
+    # This is much better than including the imaginary parts
+    # It kills y=-x diagonals; maybe not y=x?
+    if True:
+        x_sub += data_c[2].real * 2
+        x_sub += data_c[4].real * 2
+        x_sub += data_c[6].real * 2
         pass
+    else:
+        x_sub += data_c[2] * 2
+        x_sub += data_c[4] * 2
+        x_sub += data_c[6] * 2
+        pass
+    x_sub += data_c[8]
     x_sub /= (subsamp-1)
     def sub(x):
         return x - x_sub
     data_c_x = sub(data_c)
     data_p = power(data_c_x)
     x = 1
+    # Good
     for i in range(1, subsamp):
         x *= data_p[i*nsamp//subsamp]
         pass
+    x = data_p[2] * data_p[4] * data_p[6] * data_p[8] * data_p[10] * data_p[12] * data_p[14]
+    x = data_p[2] * data_p[4] * data_p[6] * data_p[8] # * data_p[10] * data_p[12] * data_p[14]
     return (16+np.log10(max(x,1E-16)))**3
     return img_f * (16+np.log10(max(x,1E-16)))**3
 

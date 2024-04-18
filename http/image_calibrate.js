@@ -92,6 +92,7 @@ class ImageCanvas {
         this.cam = null;
         this.pms = null;
         this.mesh = [];
+        this.interestings = [];
         this.cip_of_project = 0;
         this.project_name = null;
         this.load_project("local:0");
@@ -149,6 +150,23 @@ class ImageCanvas {
             }
         }
         ctx.stroke();
+    }
+
+    //mp redraw_interestings
+    redraw_interestings(ctx) {
+        if (!this.interestings || this.interestings == []) {
+            return;
+        }
+        const cl = 15;
+        ctx.strokeStyle = "#fcc";
+        ctx.lineWidth = 1;
+        for (const xyv of this.interestings) {
+                const xy = [xyv[0], xyv[1]];
+                const sxy = this.zw.scr_xy_of_img_xy(xy);
+                ctx.beginPath();
+                ctx.arc(sxy[0], sxy[1], cl, 0, Math.PI * 2, true);
+                ctx.stroke();
+        }
     }
 
     //mp redraw_grid
@@ -253,7 +271,6 @@ class ImageCanvas {
             return;
         }
         const cl = 6;
-        const cw = 2;
         
         let num_mappings = this.pms.length;
         for (let i = 0; i < num_mappings; i++) { 
@@ -316,6 +333,7 @@ class ImageCanvas {
         this.redraw_pms(ctx);
         this.redraw_rays(ctx);
         this.redraw_mesh(ctx);
+        this.redraw_interestings(ctx);
         this.redraw_grid(this.canvas);
         this.redraw_cursor(this.canvas);
     }
@@ -352,6 +370,8 @@ class ImageCanvas {
             if (cursor_info) {
                 html.clear(cursor_info);
                 const me = this;
+
+                this.refill_nps_pms();
 
                 const input = html.add_ele(cursor_info, "input");
                 input.type = "button";
@@ -434,11 +454,11 @@ class ImageCanvas {
     load_project(locator) {
         this.project = new WasmProject();
         const me = this;
+        this.project_name = locator;
         this.project_set.load_project(locator,
                                       function(local, json) {
                                           me.load_project_json(locator, json);
                                       });
-        this.project_name = locator;
     }
 
     //mp load_project_json
@@ -448,14 +468,13 @@ class ImageCanvas {
         this.project = new WasmProject();
         this.project.read_json(json);
         this.refill_cip_list();
-        this.select_cip_of_project(0);
         const dl = this.project_set.decode_locator(locator);
         const me = this;
         if (dl[0] == "server") {
             this.server_project = new ServerProject("/project/"+dl[1], this.project);
             this.server_project.fetch_thumbnails(100, function() {me.update_thumbnails();});
-            this.server_project.fetch_meshes(function() {me.update_mesh();});
         }
+        this.select_cip_of_project(0);
     }
 
     //mp update_mesh
@@ -463,6 +482,14 @@ class ImageCanvas {
         this.mesh = [];
         if (this.server_project) {
             this.mesh = this.server_project.get_mesh(this.cip_of_project);
+        }
+    }
+
+    //mp update_interesting
+    update_interesting() {
+        this.interestings = [];
+        if (this.server_project) {
+            this.interestings = this.server_project.get_interestings(this.cip_of_project);
         }
     }
 
@@ -794,6 +821,15 @@ class ImageCanvas {
         this.pms = cip.pms;
         this.image.src = cip.img;
 
+        const dl = this.project_set.decode_locator(this.project_name);
+        const me = this;
+        this.mesh = [];
+        if (dl[0] == "server") {
+            this.server_project.issue_fetch_mesh(this.cip_of_project,function() {
+                                                             me.update_mesh();});
+            this.server_project.issue_fetch_interestings(this.cip_of_project,function() {me.update_interesting();});
+        }
+
         if (this.trace_ray_name) {
             const np = this.nps.get_pt(this.trace_ray_name);
             if (np) {
@@ -803,7 +839,6 @@ class ImageCanvas {
                 this.trace_ray_name = null;
             }
         }
-        this.update_mesh();
         this.refill_camera_info();
         this.refill_nps_pms();
         this.update_img_size_or_zoom();

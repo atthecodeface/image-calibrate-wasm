@@ -10,6 +10,7 @@ export class ServerProject {
         this.project = project;
         this.thumbnails = [];
         this.meshes = [];
+        this.interestings = [];
     }
 
     //mp fetch_thumbnail
@@ -34,13 +35,28 @@ export class ServerProject {
     //mp fetch_mesh
     async fetch_mesh(cip) {
         while (this.meshes.length < cip) {
-            this.meshes.push([]);
+            this.meshes.push(null);
         }
         this.meshes[cip] = [];
         return fetch(`${this.uri}?mesh&cip=${cip}`)
             .then((response) => {
                 if (!response.ok) {
-                    throw new Error(`Failed to fetch thumbnail: ${response.status}`);
+                    throw new Error(`Failed to fetch mesh: ${response.status}`);
+                }
+                return response.json();
+            })
+    }
+
+    //mp fetch_interesting
+    async fetch_interesting(cip) {
+        while (this.interestings.length < cip) {
+            this.interestings.push([]);
+        }
+        this.interestings[cip] = [];
+        return fetch(`${this.uri}?interesting&cip=${cip}`)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch interesting points: ${response.status}`);
                 }
                 return response.json();
             })
@@ -63,20 +79,39 @@ export class ServerProject {
         Promise.all(promises).then(() => {callback(me);});
     }
 
-    //mp fetch_meshes
-    fetch_meshes(callback) {
-        this.meshes = [];
+    //mp issue_fetch_interestings
+    issue_fetch_interestings(cip, callback) {
+        if ((cip >= this.interestings.length) && this.interestings[cip]) {
+         callback(this);
+         return;
+         }
         const me = this;
         let promises = [];
-        for (let i=0; i<this.project.ncips(); i++) {
-            promises.push(
-                this.fetch_mesh(i)
+        promises.push(
+                this.fetch_interesting(cip)
                     .then((m) => {
-                        me.meshes[i] = m;
+                        me.interestings[cip] = m;
                     })
                     .catch((err) => console.error(`Fetch problem: ${err.message}`))
             );
-        }
+        Promise.all(promises).then(() => {callback(me);});
+    }
+
+    //mp issue_fetch_mesh
+    issue_fetch_mesh(cip, callback) {
+        if ((cip >= this.meshes.length) && this.meshes[cip]) {
+         callback(this);
+         return;
+         }
+        const me = this;
+        let promises = [];
+        promises.push(
+            this.fetch_mesh(cip)
+                .then((m) => {
+                    me.meshes[cip] = m;
+                })
+                .catch((err) => console.error(`Fetch problem: ${err.message}`))
+        );
         Promise.all(promises).then(() => {callback(me);});
     }
 
@@ -84,6 +119,14 @@ export class ServerProject {
     get_mesh(cip) {
         if (cip < this.meshes.length) {
             return this.meshes[cip];
+        }
+        return null;
+    }
+
+    //mp get_interestings
+    get_interestings(cip) {
+        if (cip < this.interestings.length) {
+            return this.interestings[cip];
         }
         return null;
     }
