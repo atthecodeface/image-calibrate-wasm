@@ -11,6 +11,18 @@
     image-rendering: pixelated;
 }
 
+.overlap_parent {
+    /* Make this a relative position to define a position context for 'absolute' to be meaningful relative to this block for 'can' items */
+    position: relative;
+}
+
+.image_overlap {
+    image-rendering: pixelated;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
 .log {
     overflow: scroll;
     height: 100px;

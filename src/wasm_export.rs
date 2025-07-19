@@ -129,6 +129,12 @@ impl WasmCameraInstance {
         self.camera.borrow().lens_name().into()
     }
 
+    //mp rotation
+    #[wasm_bindgen(getter)]
+    pub fn rotation(&self) -> usize {
+        self.camera.borrow().rotation()
+    }
+
     //mp position
     #[wasm_bindgen(getter)]
     pub fn position(&self) -> Result<Box<[f64]>, String> {

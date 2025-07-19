@@ -142,12 +142,13 @@ export class ServerProject {
 //a ProjectSet
 export class ProjectSet {
     //fp constructor
-    constructor(file_set) {
+    constructor(file_set, callback) {
         this.file_set = file_set;
         const local = this.file_set.dir().files_of_type("proj");
         this.projects = {};
         this.projects.local = local;
-        this.callback = null;
+        this.projects.server = [];
+        this.callback = callback;
         this.add_server_projects();
         window.log.add_log(0, "project_set", "init", "Local projects "+this.projects.local);
     }
@@ -158,15 +159,23 @@ export class ProjectSet {
             const n = Number(locator.slice(6));
             return ["local", this.projects.local[n]];
         } else if (locator.startsWith("server:")) {
-            const n = Number(locator.slice(7));
-            return ["server", this.projects.server[n]];
+            const name = locator.slice(7);
+            const n = Number(name);
+            if (!isNaN(n)) {
+                return ["server", this.projects.server[n]];
+            }
+            for (const pname of this.projects.server) {
+                if (pname == name) {
+                    return ["server", pname];
+                }
+            }
         }
         return null;
     }
     //mp load_project
     load_project(locator_str, callback) {
         const locator = this.decode_locator(locator_str);
-        if (!locator) {return;}
+        if (locator == null) {return;}
         if (locator[0] == "local") {
             const name = locator[1];
             const data = this.file_set.load_file("proj", name);
@@ -266,7 +275,7 @@ export class ProjectSet {
         }
         window.log.add_log(0, "project_set", "init", "Remote projects "+this.projects.server);
         if (this.callback) {
-            this.callback(this);
+            this.callback(this, "server_projects");
         }
     }
 

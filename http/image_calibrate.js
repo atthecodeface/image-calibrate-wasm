@@ -858,6 +858,32 @@ class ImageCanvas {
         this.just_redraw_canvas();
     }
 
+    //mp rotate_all_pms
+    rotate_all_pms() {
+        var mappings = [];
+        for (const name of this.nps.pts()) {
+            const pms_n = this.pms.mapping_of_name(name);
+            if (pms_n != null) {
+                const pxye = this.pms.get_xy_err(pms_n);
+                let x = pxye[0] - this.center_pxy[1];
+                let y = pxye[1] - this.center_pxy[0];
+                let rx = y + this.center_pxy[0];
+                let ry = -x + this.center_pxy[1];
+                mappings.push( [pms_n, name, [rx, ry], pxye[2]] );
+            }
+        }
+        console.log(mappings);
+        for (const n_n_xy_e of mappings) {
+            const pms_n = this.pms.mapping_of_name(n_n_xy_e[1]);
+            this.pms.remove_mapping(pms_n);
+        }
+        for (const n_n_xy_e of mappings) {
+            this.pms.add_mapping(this.nps,n_n_xy_e[1], n_n_xy_e[2], n_n_xy_e[3]);
+        }
+        this.refill_nps_pms();
+        this.just_redraw_canvas();
+    }
+
     //mp set_pms_to_cursor
     set_pms_to_cursor(name) {
         const pms_n = this.pms.mapping_of_name(name);

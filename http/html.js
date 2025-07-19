@@ -24,7 +24,7 @@ export function clear(id) {
 //mp add_ele
 export function add_ele(parent, type, classes) {
     const ele = document.createElement(type);
-    ele.classes = classes;
+    ele.className = classes;
     parent.append(ele);
     return ele;
 }
