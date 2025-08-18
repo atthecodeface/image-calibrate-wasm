@@ -19,7 +19,7 @@ js-sys = ">=0.3.64"
 
 [dependencies.photogram]
 version="0.1"
-path = "../glove/photogram"
+path = "../glove/photogram/photogram"
 
 [dependencies.web-sys]
 features = [

@@ -1,10 +1,24 @@
 //a To do
 //
-mod wasm_import;
-pub use wasm_import::log as wasm_log;
+pub(crate) mod wasm_import;
+pub(crate) use wasm_import::log as wasm_log;
 
-mod wasm_export;
-pub use wasm_export::WasmNamedPointSet;
+use wasm_import::{err_to_string, ToFromWasmArr};
+
+mod wasm_base;
+pub use wasm_base::WasmRay;
+
+mod wasm_camera;
+pub use wasm_camera::{WasmCameraDatabase, WasmCameraInstance};
+
+mod wasm_mapping;
+pub use wasm_mapping::{WasmNamedPoint, WasmNamedPointSet, WasmPointMappingSet};
+
+mod wasm_cip;
+pub use wasm_cip::WasmCip;
+
+mod wasm_project;
+pub use wasm_project::WasmProject;
 
 //a Useful macros
 #[macro_export]
