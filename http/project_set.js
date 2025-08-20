@@ -136,7 +136,12 @@ export class ServerProject {
         this.meshes = [];
     }
 
-    //zz AAll Done
+    //mp image_uri
+    image_uri(cip) {
+        return `${this.uri}?image&cip=${cip}`;
+    }
+
+    //zz All Done
 }
 
 //a ProjectSet

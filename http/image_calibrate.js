@@ -819,16 +819,18 @@ class ImageCanvas {
         const cip = this.project.cip(this.cip_of_project);
         this.camera = cip.camera;
         this.pms = cip.pms;
-        this.image.src = cip.img;
 
         const dl = this.project_set.decode_locator(this.project_name);
         const me = this;
         this.mesh = [];
         if (dl[0] == "server") {
+            this.image.src = this.server_project.image_uri(this.cip_of_project);
             this.server_project.issue_fetch_mesh(this.cip_of_project,function() {
                                                              me.update_mesh();});
             this.server_project.issue_fetch_interestings(this.cip_of_project,function() {me.update_interesting();});
-        }
+        } else {
+            this.image.src = cip.img;
+        }            
 
         if (this.trace_ray_name) {
             const np = this.nps.get_pt(this.trace_ray_name);
