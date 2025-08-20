@@ -8,17 +8,15 @@ export class ServerProject {
     constructor(uri, project) {
         this.uri = uri;
         this.project = project;
-        this.thumbnails = [];
-        this.meshes = [];
-        this.interestings = [];
+        this.thumbnails = {};
+        this.meshes = {};
+        this.interestings = {};
     }
 
     //mp fetch_thumbnail
     async fetch_thumbnail(cip, width) {
-        while (this.thumbnails.length < cip) {
-            this.thumbnails.push(null);
-        }
         this.thumbnails[cip] = null;
+        console.log(`fetch(${this.uri}?thumbnail&cip=${cip}&width=${width})`);
         return fetch(`${this.uri}?thumbnail&cip=${cip}&width=${width}`)
             .then((response) => {
                 if (!response.ok) {
@@ -34,10 +32,8 @@ export class ServerProject {
 
     //mp fetch_mesh
     async fetch_mesh(cip) {
-        while (this.meshes.length < cip) {
-            this.meshes.push(null);
-        }
         this.meshes[cip] = [];
+        console.log(`fetch(${this.uri}?mesh&cip=${cip})`);
         return fetch(`${this.uri}?mesh&cip=${cip}`)
             .then((response) => {
                 if (!response.ok) {
@@ -49,10 +45,8 @@ export class ServerProject {
 
     //mp fetch_interesting
     async fetch_interesting(cip) {
-        while (this.interestings.length < cip) {
-            this.interestings.push([]);
-        }
         this.interestings[cip] = [];
+        console.log(`fetch(${this.uri}?interesting&cip=${cip})`);
         return fetch(`${this.uri}?interesting&cip=${cip}`)
             .then((response) => {
                 if (!response.ok) {
@@ -64,14 +58,15 @@ export class ServerProject {
 
     //mp fetch_thumbnails
     fetch_thumbnails(width, callback) {
-        this.thumbnails = [];
+        this.thumbnails = {};
         const me = this;
         let promises = [];
         for (let i=0; i<this.project.ncips(); i++) {
+            const cip_name = this.project.cip_name(i);
             promises.push(
-                this.fetch_thumbnail(i, width)
+                this.fetch_thumbnail(cip_name, width)
                     .then((blob) => {
-                        me.thumbnails[i] = blob;
+                        me.thumbnails[cip_name] = blob;
                     })
                     .catch((err) => console.error(`Fetch problem: ${err.message}`))
             );
@@ -81,10 +76,13 @@ export class ServerProject {
 
     //mp issue_fetch_interestings
     issue_fetch_interestings(cip, callback) {
-        if ((cip >= this.interestings.length) && this.interestings[cip]) {
-         callback(this);
-         return;
-         }
+        if (!cip) {
+            return;
+        }
+        if (this.interestings[cip]) {
+            callback(this);
+            return;
+        }
         const me = this;
         let promises = [];
         promises.push(
@@ -99,10 +97,13 @@ export class ServerProject {
 
     //mp issue_fetch_mesh
     issue_fetch_mesh(cip, callback) {
-        if ((cip >= this.meshes.length) && this.meshes[cip]) {
-         callback(this);
-         return;
-         }
+        if (!cip) {
+            return;
+        }
+        if (this.meshes[cip]) {
+            callback(this);
+            return;
+        }
         const me = this;
         let promises = [];
         promises.push(
@@ -117,23 +118,17 @@ export class ServerProject {
 
     //mp get_mesh
     get_mesh(cip) {
-        if (cip < this.meshes.length) {
-            return this.meshes[cip];
-        }
-        return null;
+        return this.meshes[cip];
     }
 
     //mp get_interestings
     get_interestings(cip) {
-        if (cip < this.interestings.length) {
-            return this.interestings[cip];
-        }
-        return null;
+        return this.interestings[cip];
     }
 
     //mp clear_meshes
     clear_meshes() {
-        this.meshes = [];
+        this.meshes = {};
     }
 
     //mp image_uri

@@ -42,8 +42,7 @@ impl WasmRay {
 
     //mp closest_model_to_intersection
     pub fn closest_model_to_intersection(rays: Vec<WasmRay>) -> Option<Box<[f64]>> {
-        let ray_list: Vec<Ray> = rays.into_iter().map(|r| r.ray).collect();
-        if let Some(model) = Ray::closest_point(&ray_list, &|_r| 1.0) {
+        if let Some(model) = Ray::closest_point(rays.iter().map(|r| &r.ray), &|_r| 1.0) {
             let model: [f64; 3] = model.into();
             Some(Box::new(model))
         } else {

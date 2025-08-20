@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::*;
 
 use photogram::{
     CameraDatabase, CameraInstance, CameraInstanceDesc, CameraProjection, Cip, JsonParsable,
-    Point2D, Point3D, Rrc,
+    Point2D, Point3D, PointMapping, Rrc,
 };
 
 use crate::{err_to_string, ToFromWasmArr, WasmCameraInstance, WasmPointMappingSet, WasmRay};
@@ -49,10 +49,16 @@ impl WasmCip {
         self.cip.borrow().camera_filename().into()
     }
 
-    //ap img
+    //ap image
     #[wasm_bindgen(getter)]
-    pub fn img(&self) -> String {
-        self.cip.borrow().image_filename().into()
+    pub fn image(&self) -> String {
+        self.cip.borrow().image().to_string()
+    }
+
+    //ap image_filename
+    #[wasm_bindgen(getter)]
+    pub fn image_filename(&self) -> String {
+        self.cip.borrow().image_filename().to_string()
     }
 
     //ap pms_file
@@ -77,6 +83,20 @@ impl WasmCip {
     #[wasm_bindgen(getter)]
     pub fn pms(&self) -> WasmPointMappingSet {
         WasmPointMappingSet::of_pms(self.cip.borrow().pms().clone())
+    }
+
+    //mp locate
+    pub fn locate(&self, max_np_error: f64, max_pairs: usize) {
+        let filter = |_, pm: &PointMapping| (pm.model_error() < max_np_error);
+        self.cip.borrow_mut().locate(filter, max_pairs);
+    }
+
+    //mp orient_camera_using_model_directions
+    pub fn orient_camera_using_model_directions(&self, max_np_error: f64) {
+        let filter = |_, pm: &PointMapping| (pm.model_error() < max_np_error);
+        self.cip
+            .borrow_mut()
+            .orient_camera_using_model_directions(filter);
     }
 
     //zz All done

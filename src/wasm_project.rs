@@ -76,8 +76,10 @@ impl WasmProject {
     }
 
     //mp add_cip
-    pub fn add_cip(&mut self, cip: &WasmCip) -> usize {
-        self.project.add_cip(cip.cip().clone())
+    pub fn add_cip(&mut self, cip: &WasmCip) -> String {
+        let cip_name = cip.image().clone();
+        self.project.add_cip(cip.cip().clone());
+        cip_name
     }
 
     //ap ncips
@@ -85,27 +87,33 @@ impl WasmProject {
         self.project.ncips()
     }
 
+    //mp cip_name
+    pub fn cip_name(&self, n: usize) -> Option<String> {
+        self.project.cip_name(n)
+    }
+
     //mp cip
-    pub fn cip(&self, n: usize) -> Result<WasmCip, String> {
-        if n >= self.project.ncips() {
-            Err("Cip index out of range".into())
+    pub fn cip(&self, name: String) -> Result<WasmCip, String> {
+        if self.project.cip(&name).is_none() {
+            Err(format!("Cip {name} not found"))
         } else {
-            Ok(WasmCip::of_cip(self.project.cip(n).clone()))
+            Ok(WasmCip::of_cip(self.project.cip(&name).unwrap().clone()))
         }
     }
 
     //mp cip_read_json
     pub fn cip_read_json(
         &self,
-        n: usize,
+        name: String,
         camera_json: &str,
         pms_json: &str,
     ) -> Result<String, String> {
-        if n >= self.project.ncips() {
-            Err("Cip index out of range".into())
+        if self.project.cip(&name).is_none() {
+            Err(format!("Cip {name} not found"))
         } else {
             self.project
-                .cip(n)
+                .cip(&name)
+                .unwrap()
                 .borrow_mut()
                 .read_json(&self.project, camera_json, pms_json)
                 .map_err(err_to_string)

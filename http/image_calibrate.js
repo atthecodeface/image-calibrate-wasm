@@ -93,7 +93,7 @@ class ImageCanvas {
         this.pms = null;
         this.mesh = [];
         this.interestings = [];
-        this.cip_of_project = 0;
+        this.cip_of_project = null;
         this.project_name = null;
         this.load_project("local:0");
         window.log.add_log(0, "project", "load", `Read project ${name}`);
@@ -298,10 +298,11 @@ class ImageCanvas {
         ctx.lineWidth = 1;
         ctx.beginPath();
         for (let i=0; i<this.project.ncips(); i++) {
-            if (i == this.cip_of_project) {
+            const cip_name = this.project.cip_name(i);
+            if (cip_name == this.cip_of_project) {
                 continue;
             }
-            const cip = this.project.cip(i);
+            const cip = this.project.cip(cip_name);
             const mapping = cip.pms.mapping_of_name(this.trace_ray_name);
             if (!mapping) {
                 continue;
@@ -442,9 +443,10 @@ class ImageCanvas {
                 cip_list.removeChild(cip_list.firstChild);
             }
             for (let i=0; i<this.project.ncips(); i++) {
+                const cip_name = this.project.cip_name(i);
                 const opt = document.createElement("option");
-                opt.setAttribute("value", i);
-                opt.innerText = i;
+                opt.setAttribute("value", cip_name);
+                opt.innerText = cip_name;
                 cip_list.appendChild(opt);
             }
         }
@@ -474,7 +476,10 @@ class ImageCanvas {
             this.server_project = new ServerProject("/project/"+dl[1], this.project);
             this.server_project.fetch_thumbnails(100, function() {me.update_thumbnails();});
         }
-        this.select_cip_of_project(0);
+        const first_cip = this.project.cip_name(0);
+        this.select_cip_of_project(first_cip);
+        console.log(this.project);
+        console.log(this.project.cip_name(0));
     }
 
     //mp update_mesh
@@ -611,8 +616,12 @@ class ImageCanvas {
 
     //mp locate
     locate(max_nps_error) {
-        console.log("Located with error", this.camera.locate_using_model_lines(this.pms, max_nps_error));
-        console.log("Oriented error", this.camera.orient_using_rays_from_model(this.pms));
+        if (!this.cip_of_project) {return;}
+        const cip = this.project.cip(this.cip_of_project);
+        if (!cip) {return;}
+
+        console.log("Located with error", cip.locate(max_nps_error, 30));
+        console.log("Oriented error", cip.orient_camera_using_model_directions(max_nps_error));
         this.refill_camera_info();
         this.just_redraw_canvas();
     }
@@ -761,12 +770,10 @@ class ImageCanvas {
             html.clear(camera_info);
 
             const cip = this.project.cip(this.cip_of_project);
-            const n_cip = this.project.ncips();
-            const cip_num = `${this.cip_of_project} of ${n_cip}`;
             const itable = html.vtable("", 
-                                       [ ["CIP", cip_num],
+                                       [ ["CIP", cip.image],
                                         ["Camera", cip.cam_file],
-                                        ["Image", cip.img],
+                                        ["Image", cip.image_filename],
                                         ["PMS", cip.pms_file],
                                       ] );
             camera_info.append(itable);
@@ -809,14 +816,14 @@ class ImageCanvas {
     }    
 
     //mp select_cip_of_project
-    select_cip_of_project(n) {
-        if (n > this.project.ncips()) {
-            n = 0;
-        }
-
+    select_cip_of_project(name) {
         this.nps = this.project.nps;
-        this.cip_of_project = n;
+        this.cip_of_project = name;
+
         const cip = this.project.cip(this.cip_of_project);
+        if (cip == null) {
+            return;
+        }
         this.camera = cip.camera;
         this.pms = cip.pms;
 
